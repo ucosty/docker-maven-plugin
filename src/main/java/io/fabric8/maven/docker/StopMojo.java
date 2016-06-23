@@ -1,9 +1,9 @@
 package io.fabric8.maven.docker;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import edu.emory.mathcs.backport.java.util.Collections;
 import io.fabric8.maven.docker.config.RunImageConfiguration;
 import io.fabric8.maven.docker.service.QueryService;
 import io.fabric8.maven.docker.service.RunService;
@@ -58,7 +58,7 @@ public class StopMojo extends AbstractDockerMojo {
     }
 
     private void stopContainers(QueryService queryService, RunService runService, PomLabel pomLabel) throws DockerAccessException {
-        for (ImageConfiguration image : getImages()) {
+        for (ImageConfiguration image : getResolvedImages()) {
             for (Container container : getContainersToStop(queryService, image)) {
                 if (shouldStopContainer(container, pomLabel)) {
                     runService.stopContainer(container.getId(), image, keepContainer, removeVolumes);
@@ -73,7 +73,11 @@ public class StopMojo extends AbstractDockerMojo {
         RunImageConfiguration.NamingStrategy strategy = image.getRunConfiguration().getNamingStrategy();
         if (strategy == RunImageConfiguration.NamingStrategy.alias) {
             Container container = queryService.getContainerByName(image.getAlias());
-            containers = container != null ? Collections.singletonList(container) : Collections.emptyList();
+            if (container !=  null) {
+                containers = Collections.singletonList(container);
+            } else {
+                containers = Collections.emptyList();
+            }
         } else {
             containers = queryService.getContainersForImage(image.getName());
         }

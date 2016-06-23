@@ -5,31 +5,33 @@
 
 * Increase version number in doc/manual/installation.md example
 * Increase version numbers in the poms below samples/ (they are not automatically updated)
+
+```
+cd samples
+mvn versions:set -DgenerateBackupPoms=false -DnewVersion=0.15.4
+```
+
 * Run "update_issue_links.sh" in "doc/"
 * Check into Git
 
 ## Building and deploying
 
-The release process uses the maven release plugin:
+* Run the build over the fabric8 CD Pipeline 
 
-     mvn -Dmaven.repo.local=/tmp/clean-repo -DdevelopmentVersion=1.0.1-SNAPSHOT -DreleaseVersion=1.0.0 -Dtag=v1.0.0 -Pdist,fabric8-oss release:prepare
-     mvn -Dmaven.repo.local=/tmp/clean-repo -Pdist,fabric8-oss release:perform
- 
-This will deploy to Maven central. The profile "dist" enables signing
-of artifacts and uses a running GPG agent.
+## After the build
 
-## Publishing 
+* Set sample version back to the snaphot version
 
-In order to publish the staged artifacts:
+```
+mvn versions:set -DgenerateBackupPoms=false -DnewVersion=0.15-SNAPSHOT
+```
 
-* Login into https://oss.sonatype.org/
-* "Staging Repositories"
-* Select staging repository
-* Click "Close" in menu
-* Check the artifacts in the "closed" repository
-* If ok --> click "Release" in menu
+* Check in
 
-See also Sonatype's [introduction][1]
+* Rebase `integration` with `master` again
 
-
-   [1]: https://docs.sonatype.org/display/Repository/Sonatype+OSS+Maven+Repository+Usage+Guide
+```
+git co integration
+git rebase master
+git push
+```

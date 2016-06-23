@@ -5,6 +5,7 @@ import java.util.*;
 import io.fabric8.maven.docker.util.EnvUtil;
 import io.fabric8.maven.docker.util.Logger;
 import io.fabric8.maven.docker.util.StartOrderResolver;
+import org.apache.maven.plugins.annotations.Parameter;
 
 /**
  * @author roland
@@ -12,45 +13,40 @@ import io.fabric8.maven.docker.util.StartOrderResolver;
  */
 public class ImageConfiguration implements StartOrderResolver.Resolvable {
 
-    /**
-     * @parameter
-     * @required
-     */
+    @Parameter(required = true)
     private String name;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private String alias;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private RunImageConfiguration run;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private BuildImageConfiguration build;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private WatchImageConfiguration watch;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private Map<String,String> external;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private String registry;
     
     // Used for injection
     public ImageConfiguration() {}
-   
+
+    public ImageConfiguration(ImageConfiguration that) {
+        this.name = that.name;
+        this.alias = that.alias;
+        this.run = that.run;
+        this.build = that.build;
+        this.watch = that.watch;
+        this.external = that.external;
+        this.registry = that.registry;
+    }
+
     @Override
     public String getName() {
         return name;
@@ -136,13 +132,14 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
         return String.format("ImageConfiguration {name='%s', alias='%s'}", name, alias);
     }
 
-    public String validate(Logger log) {
+    public String initAndValidate(ConfigHelper.NameFormatter nameFormatter, Logger log) {
+        name = nameFormatter.format(name);
         String minimalApiVersion = null;
-        if (null != build) {
-            minimalApiVersion = build.validate(log);
+        if (build != null) {
+            minimalApiVersion = build.initAndValidate(log);
         }
-        if (null != run) {
-            minimalApiVersion = EnvUtil.extractLargerVersion(minimalApiVersion,run.validate());
+        if (run != null) {
+            minimalApiVersion = EnvUtil.extractLargerVersion(minimalApiVersion, run.initAndValidate());
         }
         return minimalApiVersion;
     }
@@ -151,7 +148,16 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
     // Builder for image configurations
 
     public static class Builder {
-        private ImageConfiguration config = new ImageConfiguration();
+        private final ImageConfiguration config;
+
+        public Builder() {
+            this.config = new ImageConfiguration();
+        }
+
+
+        public Builder(ImageConfiguration that) {
+            this.config = new ImageConfiguration(that);
+        }
 
         public Builder name(String name) {
             config.name = name;

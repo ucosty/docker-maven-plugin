@@ -2,11 +2,14 @@ package io.fabric8.maven.docker.util;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import io.fabric8.maven.docker.AbstractDockerMojo;
 import org.codehaus.plexus.util.StringUtils;
+
+import static java.util.concurrent.TimeUnit.*;
 
 /**
  * Utility class for various (loosely) environment related tasks.
@@ -195,6 +198,66 @@ public class EnvUtil {
         }
     }
 
+    /**
+     * Fix path on Windows machines, i.e. convert 'c:\...\' to '/c/..../'
+     *
+     * @param path path to fix
+     * @return the fixed path
+     */
+    public static String fixupPath(String path) {
+        // Hack-fix for mounting on Windows where the ${projectDir} variable and other
+        // contain backslashes and what not. Related to #188
+        Pattern pattern = Pattern.compile("^(?i)([A-Z]):(.*)$");
+        Matcher matcher = pattern.matcher(path);
+        if (matcher.matches()) {
+            String result = "/" + matcher.group(1).toLowerCase() + matcher.group(2);
+            return result.replace("\\","/");
+        }
+        return path;
+    }
+
+    /**
+     * Calculate the duration between now and the given time
+     *
+     * Taken mostly from http://stackoverflow.com/a/5062810/207604 . Kudos to @dblevins
+     *
+     * @param start starting time (in milliseconds)
+     * @return time in seconds
+     *
+     */
+    public static String formatDurationTill(long start) {
+        long duration = System.currentTimeMillis() - start;
+        StringBuilder res = new StringBuilder();
+
+        TimeUnit current = HOURS;
+
+        while (duration > 0) {
+            long temp = current.convert(duration, MILLISECONDS);
+
+            if (temp > 0) {
+                duration -= current.toMillis(temp);
+                res.append(temp).append(" ").append(current.name().toLowerCase());
+                if (temp < 2) res.deleteCharAt(res.length() - 1);
+                res.append(", ");
+            }
+            if (current == SECONDS) {
+                break;
+            }
+            current = TimeUnit.values()[current.ordinal() - 1];
+        }
+        if (res.lastIndexOf(", ") < 0) {
+            return duration + " " + MILLISECONDS.name().toLowerCase();
+        }
+        res.deleteCharAt(res.length() - 2);
+        int i = res.lastIndexOf(", ");
+        if (i > 0) {
+            res.deleteCharAt(i);
+            res.insert(i, " and");
+        }
+
+        return res.toString();
+    }
+
     private static boolean propMatchesPrefix(String prefix, String key) {
         return key.startsWith(prefix) && key.length() >= prefix.length();
     }
@@ -212,11 +275,11 @@ public class EnvUtil {
     public static File prepareAbsoluteOutputDirPath(MojoParameters params, String dir, String path) {
         return prepareAbsolutePath(params, new File(params.getOutputDirectory(), dir).toString(), path);
     }
-    
+
     public static File prepareAbsoluteSourceDirPath(MojoParameters params, String path) {
         return prepareAbsolutePath(params, params.getSourceDirectory(), path);
     }
-        
+
     private static File prepareAbsolutePath(MojoParameters params, String directory, String path) {
         File file = new File(path);
         if (file.isAbsolute()) {
@@ -224,5 +287,4 @@ public class EnvUtil {
         }
         return new File(new File(params.getProject().getBasedir(), directory), path);
     }
-
 }

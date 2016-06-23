@@ -1,4 +1,4 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
@@ -19,9 +19,18 @@
 
   -->
 
+  <parent>
+    <groupId>io.fabric8</groupId>
+    <artifactId>dmp-sample-parent</artifactId>
+    <version>0.15-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
   <groupId>io.fabric8</groupId>
   <artifactId>docker-jolokia-demo</artifactId>
-  <version>0.14.2</version>
+  <version>0.15-SNAPSHOT</version>
+  <!-- add custom lifecycle -->
+  <packaging>docker</packaging>
 
   <url>http://www.jolokia.org</url>
 
@@ -75,6 +84,7 @@
         <groupId>io.fabric8</groupId>
         <artifactId>docker-maven-plugin</artifactId>
         <version>${project.version}</version>
+        <extensions>true</extensions> <!-- enables using 'docker' packaging above -->
         <configuration>
           <watchInterval>500</watchInterval>
           <logDate>default</logDate>
@@ -98,13 +108,14 @@
                   <CATALINA_OPTS>-Xmx32m</CATALINA_OPTS>
                   <!-- Base starts jolokia by default. With this, it can be disabled -->
                   <JOLOKIA_OFF>1</JOLOKIA_OFF>
+                  <EMPTY_PROP></EMPTY_PROP>
                 </env>
                 <envPropertyFile>${project.basedir}/src/main/docker/environment.properties</envPropertyFile>
                 <ports>
                   <!-- Port mappings: Container internal port (which must be exposed) will be
                  dynamically mapped and this (random) port will be assigned to the maven variable
                  ${jolokia.port}. Multiple port mappings can be specified here-->
-                  <port>${jolokia.host}:${jolokia.port}:8080</port>
+                  <port>${BLA_BLUB}</port>
                 </ports>
                 <wait>
                   <!-- The plugin waits until this URL is reachable via HTTP ... -->
@@ -135,6 +146,7 @@
               <name>fabric8/${project.artifactId}:${project.version}</name>
               <build>
                 <tags>
+                  <tag>${project.version}</tag>
                   <tag>latest</tag>
                 </tags>
                 <!-- The assembly descriptor prepares the "/maven" directory in the temporary data
@@ -155,31 +167,6 @@
             </image>
           </images>
         </configuration>
-        <!-- Connect this plugin to the maven lifecycle around the integration-test phase. I.e. start the container
-             in pre-integration-test and stop it in post-integration-test. -->
-        <executions>
-          <execution>
-            <id>start</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>build</goal>
-              <goal>start</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>stop</id>
-            <phase>post-integration-test</phase>
-            <goals>
-              <goal>stop</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>sources</id>
-            <goals>
-              <goal>source</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
 
       <!-- fails-safe-plugin should be used instead of surefire so that the container gets stopped even
@@ -187,20 +174,6 @@
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>2.17</version>
-        <executions>
-          <execution>
-            <id>integration-test</id>
-            <goals>
-              <goal>integration-test</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>verify</id>
-            <goals>
-              <goal>verify</goal>
-            </goals>
-          </execution>
-        </executions>
         <configuration>
           <systemPropertyVariables>
             <!-- Needs to be repeated here (the following two lines strangely doesn't work when the next line is omitted although)
@@ -211,17 +184,6 @@
             <jolokia.url>http://${docker.host.address}:${jolokia.port}/jolokia</jolokia.url>
             <jolokia.version>${jolokia.version}</jolokia.version>
           </systemPropertyVariables>
-        </configuration>
-      </plugin>
-
-
-      <!-- Tell surefire to skip test, we are using the failsafe plugin -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.10</version>
-        <configuration>
-          <skip>true</skip>
         </configuration>
       </plugin>
 
@@ -247,8 +209,12 @@
     <repository>
       <id>snapshots-repo</id>
       <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-      <releases><enabled>false</enabled></releases>
-      <snapshots><enabled>true</enabled></snapshots>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
     </repository>
   </repositories>
 
@@ -333,10 +299,12 @@
                   <build>
                     <from>${image}</from>
                     <assembly>
-                      <inline xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
-                              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                      <mode>dir</mode>
+                      <inline xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                              xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
                               xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
                         <id>jolokia-it</id>
+
                         <dependencySets>
                           <dependencySet>
                             <includes>
@@ -379,22 +347,26 @@
 
     <profile>
       <id>dockerfile</id>
+      <properties>
+        <dockerfile>demo/Dockerfile</dockerfile>
+      </properties>
       <build>
         <plugins>
           <plugin>
             <groupId>io.fabric8</groupId>
             <artifactId>docker-maven-plugin</artifactId>
             <configuration combine.self="override">
-              <autoPull>false</autoPull>
+              <autoPull>true</autoPull>
               <images>
                 <image>
                   <!-- Artifact Image-->
                   <name>jolokia/${project.artifactId}-dockerfile:${project.version}</name>
                   <alias>jolokia</alias>
                   <build>
-                    <assembly>
-                      <dockerFileDir>demo</dockerFileDir>
-                    </assembly>
+                    <dockerFile>${dockerfile}</dockerFile>
+                    <args>
+                      <deploymentDir>maven</deploymentDir>
+                    </args>
                   </build>
                   <run>
                     <ports>
@@ -402,9 +374,9 @@
                     </ports>
                     <wait>
                       <!-- The plugin waits until this URL is reachable via HTTP ... -->
-                      <wait>
+                      <http>
                         <url>http://${docker.host.address}:${jolokia.port}/jolokia</url>
-                      </wait>
+                      </http>
                       <time>10000</time>
                     </wait>
                   </run>
@@ -448,7 +420,6 @@
         </plugins>
       </build>
     </profile>
-
 
     <profile>
       <id>wildfly</id>
@@ -496,7 +467,9 @@
         <server.name>tomcat</server.name>
         <server.version>7.0</server.version>
       </properties>
-      <activation><activeByDefault>true</activeByDefault></activation>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
     </profile>
 
     <profile>
@@ -507,5 +480,32 @@
       </properties>
     </profile>
 
+    <profile>
+      <id>properties</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.soebes.maven.plugins</groupId>
+            <artifactId>echo-maven-plugin</artifactId>
+            <version>0.2</version>
+            <executions>
+              <execution>
+                <phase>integration-test</phase>
+                <goals>
+                  <goal>echo</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <echos>
+                <echo>============= Props  =============</echo>
+                <echo>IP : ${docker.container.server.ip}</echo>
+              </echos>
+            </configuration>
+          </plugin>
+
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

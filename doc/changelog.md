@@ -1,5 +1,50 @@
 # ChangeLog
 
+* **0.15.7** (2016-06-09)
+  - Add support for '.maven-dockerinclude' for including certain files in plain Dockerfile build ([#471](https://github.com/fabric8io/docker-maven-plugin/issues/471))
+  - Add support for placeholders in image names.
+  - Expose container id as Maven property `docker.container.<alias>.id` ([#412](https://github.com/fabric8io/docker-maven-plugin/issues/412))
+  - Fix broken link in documentation ([#468](https://github.com/fabric8io/docker-maven-plugin/issues/468))
+
+* **0.15.4** (2016-06-03)
+  - Update dependencies: Apache HttpClient 4.5.2, JMockit 1.23, ...
+  - Fix read-only bindings ([#462](https://github.com/fabric8io/docker-maven-plugin/issues/462)) 
+  - Add 'shmSize' as option to the build config ([#463](https://github.com/fabric8io/docker-maven-plugin/issues/463))
+  - Fixed issue with `memory` and `
+    
+* **0.15.3** (2016-05-27)
+  - Add duration information when pulling, building and pushing images ([#313](https://github.com/fabric8io/docker-maven-plugin/issues/313))
+  - Fixed logging to always use format strings ([#457](https://github.com/fabric8io/docker-maven-plugin/issues/457))
+  - Allow extended image names ([#459](https://github.com/fabric8io/docker-maven-plugin/issues/459))
+  
+* **0.15.2** (2016-05-19) 
+  - More robust response stream parsing ([#436](https://github.com/fabric8io/docker-maven-plugin/issues/436))
+  - Add `docker.dockerFileDir` and `docker.dockerFile` to the properties configuration provider. ([#438](https://github.com/fabric8io/docker-maven-plugin/issues/438))
+  - Fix splitting of bind volumes for Windows pathes ([#443](https://github.com/fabric8io/docker-maven-plugin/issues/443))
+  - Add new build config option `user` for switching the user at the end of the Dockerfile. `docker.user` can be used
+    for the properties configuration provider ([#441](https://github.com/fabric8io/docker-maven-plugin/issues/441))
+  - Include dot dirs when creating the build tar ([#446](https://github.com/fabric8io/docker-maven-plugin/issues/446))
+  - Fix property handler with wait config but empty tcp wait connection ([#451](https://github.com/fabric8io/docker-maven-plugin/issues/451))
+  
+* **0.15.1** (2016-05-03)
+  - Fix push / pull progress bar ([#91](https://github.com/fabric8io/docker-maven-plugin/issues/91))
+  - Allow empty environment variable ([#434](https://github.com/fabric8io/docker-maven-plugin/issues/434))
+  - Async log request get now their own HTTP client ([#344](https://github.com/fabric8io/docker-maven-plugin/issues/344)) ([#259](https://github.com/fabric8io/docker-maven-plugin/issues/259))
+  
+* **0.15.0** (2016-04-27)
+  - Be more conservative when no "warnings" are returned on create ([#407](https://github.com/fabric8io/docker-maven-plugin/issues/407))
+  - Fix parsing of timestamps with numeric timezone ([#410](https://github.com/fabric8io/docker-maven-plugin/issues/410))
+  - Validate image names to fit Docker conventions ([#423](https://github.com/fabric8io/docker-maven-plugin/issues/423)) ([#419](https://github.com/fabric8io/docker-maven-plugin/issues/419))
+  - Add support for builds args in external Dockerfiles ([#334](https://github.com/fabric8io/docker-maven-plugin/issues/334)) 
+  - Move `dockerFileDir` to topLevel `<build>` and introduced `dockerFile` directive
+   `build>assembly>dockerFileDir` is now deprecated and will be removed.
+  - Add new packaging "docker" (build + run), "docker-build" (build only) and 
+    "docker-tar" (creating source)  ([#433](https://github.com/fabric8io/docker-maven-plugin/issues/433))
+  - Add `docker:run` as an alias to `docker:start`
+  - Expose certain container properties also as Maven properties. By default
+    the format is `docker.container.<alias>.ip` for the internal IP address of container with alias `<alias>`.
+    ([#198](https://github.com/fabric8io/docker-maven-plugin/issues/198))
+  
 * **0.14.2**
   - Introduce a mode `try` for `<cleanup>` so that an image gets removed if not being still used. 
     This is the default now, which should be close enough to `true` (except that it won't fail the build

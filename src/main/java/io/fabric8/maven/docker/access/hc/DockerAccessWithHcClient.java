@@ -76,15 +76,10 @@ public class DockerAccessWithHcClient implements DockerAccess {
         }
         if (uri.getScheme().equalsIgnoreCase("unix")) {
             this.delegate =
-                    new ApacheHttpClientDelegate(new UnixSocketClientBuilder().build(uri.getPath(), maxConnections));
+                    new ApacheHttpClientDelegate(new UnixSocketClientBuilder(uri.getPath(), maxConnections));
             this.urlBuilder = new UrlBuilder(DUMMY_BASE_URL, apiVersion);
         } else {
-            HttpClientBuilder builder = new HttpClientBuilder();
-            if (isSSL(baseUrl)) {
-                builder.certPath(certPath);
-            }
-            builder.maxConnections(maxConnections);
-            this.delegate = new ApacheHttpClientDelegate(builder.build());
+            this.delegate = new ApacheHttpClientDelegate(new HttpClientBuilder(isSSL(baseUrl) ? certPath : null, maxConnections));
             this.urlBuilder = new UrlBuilder(baseUrl, apiVersion);
         }
     }
@@ -154,7 +149,7 @@ public class DockerAccessWithHcClient implements DockerAccess {
     public String createContainer(ContainerCreateConfig containerConfig, String containerName)
             throws DockerAccessException {
         String createJson = containerConfig.toJson();
-        log.debug("Container create config: " + createJson);
+        log.debug("Container create config: %s", createJson);
 
         try {
             String url = urlBuilder.createContainer(containerName);
@@ -192,10 +187,10 @@ public class DockerAccessWithHcClient implements DockerAccess {
     }
 
     @Override
-    public void buildImage(String image, File dockerArchive, boolean forceRemove, boolean noCache)
-            throws DockerAccessException {
+    public void buildImage(String image, File dockerArchive, String dockerfileName, boolean forceRemove, boolean noCache,
+                           Map<String, String> buildArgs) throws DockerAccessException {
         try {
-            String url = urlBuilder.buildImage(image, forceRemove, noCache);
+            String url = urlBuilder.buildImage(image, dockerfileName, forceRemove, noCache, buildArgs);
             delegate.post(url, dockerArchive, createBuildResponseHandler(), HTTP_OK);
         } catch (IOException e) {
             throw new DockerAccessException(e, "Unable to build image [%s]", image);
@@ -222,7 +217,7 @@ public class DockerAccessWithHcClient implements DockerAccess {
 
     @Override
     public LogGetHandle getLogAsync(String containerId, LogCallback callback) {
-        LogRequestor extractor = new LogRequestor(delegate.getHttpClient(), urlBuilder, containerId, callback);
+        LogRequestor extractor = new LogRequestor(delegate.createBasicClient(), urlBuilder, containerId, callback);
         extractor.start();
         return extractor;
     }
@@ -370,13 +365,13 @@ public class DockerAccessWithHcClient implements DockerAccess {
     }
 
     // visible for testing?
-    private HcChunckedResponseHandlerWrapper createBuildResponseHandler() {
-        return new HcChunckedResponseHandlerWrapper(log, new BuildJsonResponseHandler(log));
+    private HcChunkedResponseHandlerWrapper createBuildResponseHandler() {
+        return new HcChunkedResponseHandlerWrapper(new BuildJsonResponseHandler(log));
     }
 
     // visible for testing?
-    private HcChunckedResponseHandlerWrapper createPullOrPushResponseHandler() {
-        return new HcChunckedResponseHandlerWrapper(log, new PullOrPushResponseJsonHandler(log));
+    private HcChunkedResponseHandlerWrapper createPullOrPushResponseHandler() {
+        return new HcChunkedResponseHandlerWrapper(new PullOrPushResponseJsonHandler(log));
     }
 
     private Map<String, String> createAuthHeader(AuthConfig authConfig) {
@@ -398,11 +393,13 @@ public class DockerAccessWithHcClient implements DockerAccess {
     // ===========================================================================================================
 
     private void logWarnings(JSONObject body) {
-        Object warningsObj = body.get("Warnings");
-        if (warningsObj != JSONObject.NULL) {
-            JSONArray warnings = (JSONArray) warningsObj;
-            for (int i = 0; i < warnings.length(); i++) {
-                log.warn(warnings.getString(i));
+        if (body.has("Warnings")) {
+            Object warningsObj = body.get("Warnings");
+            if (warningsObj != JSONObject.NULL) {
+                JSONArray warnings = (JSONArray) warningsObj;
+                for (int i = 0; i < warnings.length(); i++) {
+                    log.warn(warnings.getString(i));
+                }
             }
         }
     }
@@ -412,7 +409,7 @@ public class DockerAccessWithHcClient implements DockerAccess {
         for (int i = 0; i < logElements.length(); i++) {
             JSONObject entry = logElements.getJSONObject(i);
             for (Object key : entry.keySet()) {
-                log.debug(key + ": " + entry.get(key.toString()));
+                log.debug("%s: %s", key, entry.get(key.toString()));
             }
         }
     }
@@ -422,14 +419,11 @@ public class DockerAccessWithHcClient implements DockerAccess {
     }
 
     // Preparation for performing requests
-    private static class HcChunckedResponseHandlerWrapper implements ResponseHandler<Object> {
+    private static class HcChunkedResponseHandlerWrapper implements ResponseHandler<Object> {
 
         private EntityStreamReaderUtil.JsonEntityResponseHandler handler;
-        private Logger log;
 
-        public HcChunckedResponseHandlerWrapper(Logger log,
-                                                EntityStreamReaderUtil.JsonEntityResponseHandler handler) {
-            this.log = log;
+        HcChunkedResponseHandlerWrapper(EntityStreamReaderUtil.JsonEntityResponseHandler handler) {
             this.handler = handler;
         }
 
@@ -442,5 +436,4 @@ public class DockerAccessWithHcClient implements DockerAccess {
             return null;
         }
     }
-
 }

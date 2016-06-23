@@ -1,5 +1,6 @@
 package io.fabric8.maven.docker.util;
 
+
 /**
  * Simple log handler for printing used during the maven build
  *
@@ -11,35 +12,70 @@ public interface Logger {
     /**
      * Debug message if debugging is enabled.
      *
-     * @param message message to print out
+     * @param format debug message format
+     * @param params parameter for formatting message
      */
-    void debug(String message);
+    void debug(String format, Object ... params);
+
+
+    /**
+     * Debug message if debugging is enabled.
+     *
+     * @param msg message to print
+     */
+    void debug(String msg);
+
 
     /**
      * Informational message
      *
-     * @param message info
+     * @param format info message format
+     * @param params parameter for formatting message
+     */
+    void info(String format, Object ... params);
+
+    /**
+     * Informational message
+     *
+     * @param message to print
      */
     void info(String message);
 
     /**
-     * Verbose messag
+     * Verbose message
      *
-     * @param message
+     * @param format verbose message format
+     * @param params parameter for formatting message
      */
-    void verbose(String message);
+    void verbose(String format, Object ... params);
 
     /**
      * A warning.
      *
-     * @param message warning
+     * @param format warning message format
+     * @param params parameter for formatting message
+     */
+    void warn(String format, Object ... params);
+
+    /**
+     * A warning.
+     *
+     * @param message to print
      */
     void warn(String message);
 
     /**
      * Severe errors
      *
-     * @param message error
+     * @param format error message format
+     * @param params parameter for formatting message
+     */
+    void error(String format, Object ... params);
+
+    /**
+     * Severe errors
+     *
+     * @param message to print
      */
     void error(String message);
 
@@ -57,20 +93,21 @@ public interface Logger {
     boolean isDebugEnabled();
 
     /**
-     * Start a progress bar
-     * @param total the total number to be expected
+     * Start a progress bar* @param total the total number to be expected
      */
-    void progressStart(int total);
+    void progressStart();
 
     /**
      * Update the progress
      *
-     * @param current the current number to be expected
+     * @param layerId the image id of the layer fetched
+     * @param status a status message
+     * @param progressMessage the progressBar
      */
-    void progressUpdate(int current);
+    void progressUpdate(String layerId, String status, String progressMessage);
 
     /**
-     * Finis progress meter. Must be always called if {@link #progressStart(int)} has been
+     * Finis progress meter. Must be always called if {@link #progressStart()} has been
      * used.
      */
     void progressFinished();

@@ -5,6 +5,7 @@ import java.net.URLEncoder;
 import java.util.*;
 
 import io.fabric8.maven.docker.util.ImageName;
+import org.json.JSONObject;
 
 public final class UrlBuilder {
 
@@ -17,13 +18,20 @@ public final class UrlBuilder {
         this.apiVersion = apiVersion;
         this.baseUrl = stripSlash(baseUrl);
     }
-    
-    public String buildImage(String image, boolean forceRemove, boolean noCache) {
-        return u("build")
-                .p("t",image)
-                .p(forceRemove ? "forcerm" : "rm", true)
-                .p("nocache", noCache)
-                .build();
+
+    public String buildImage(String image, String dockerfileName, boolean forceRemove, boolean noCache, Map<String, String> buildArgs) {
+
+        Builder urlBuilder = u("build")
+            .p("t", image)
+            .p(forceRemove ? "forcerm" : "rm", true)
+            .p("nocache", noCache);
+        if (buildArgs != null && !buildArgs.isEmpty()) {
+            urlBuilder.p("buildargs", new JSONObject(buildArgs).toString());
+        }
+        if (dockerfileName != null) {
+            urlBuilder.p("dockerfile",dockerfileName);
+        }
+        return urlBuilder.build();
     }
 
     public String copyArchive(String containerId, String targetPath) {
@@ -144,7 +152,7 @@ public final class UrlBuilder {
 
     // Entry point for builder
     private Builder u(String format, String ... args) {
-        return new Builder(createUrl(String.format(format,encodeArgs(args))));
+        return new Builder(createUrl(String.format(format, (Object[]) encodeArgs(args))));
     }
 
     private String[] encodeArgs(String[] args) {

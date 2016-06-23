@@ -4,11 +4,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.List;
 
 import io.fabric8.maven.docker.access.AuthConfig;
 import io.fabric8.maven.docker.access.DockerAccess;
 import io.fabric8.maven.docker.access.DockerAccessException;
 import io.fabric8.maven.docker.access.hc.DockerAccessWithHcClient;
+import io.fabric8.maven.docker.config.ConfigHelper;
 import io.fabric8.maven.docker.service.QueryService;
 import io.fabric8.maven.docker.service.ServiceHub;
 import io.fabric8.maven.docker.service.ServiceHubFactory;
@@ -35,13 +37,19 @@ import io.fabric8.maven.docker.log.LogOutputSpecFactory;
  * @author roland
  * @since 26.03.14
  */
-public abstract class AbstractDockerMojo extends AbstractMojo implements Contextualizable {
+public abstract class AbstractDockerMojo extends AbstractMojo implements Contextualizable, ConfigHelper.Customizer {
 
     // Key for indicating that a "start" goal has run
     public static final String CONTEXT_KEY_START_CALLED = "CONTEXT_KEY_DOCKER_START_CALLED";
 
     // Key holding the log dispatcher
     public static final String CONTEXT_KEY_LOG_DISPATCHER = "CONTEXT_KEY_DOCKER_LOG_DISPATCHER";
+
+    // Key under which resolved images can be stored so that it can be reused by all Mojos once created
+    public static final String CONTEXT_KEY_RESOLVED_IMAGES = "CONTEXT_KEY_RESOLVED_IMAGES";
+
+    // Key under which to store the minimal API version to use
+    public static final String CONTEXT_KEY_MINIMAL_API_VERSION = "CONTEXT_KEY_MINIMAL_API_VERSION";
 
     // Standard HTTPS port (IANA registered). The other 2375 with plain HTTP is used only in older
     // docker installations.
@@ -83,7 +91,9 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
     @Parameter(property = "docker.apiVersion")
     private String apiVersion;
 
-    // URL to docker daemon
+    /**
+     * URL to docker daemon
+     */
     @Parameter(property = "docker.host")
     private String dockerHost;
 
@@ -110,9 +120,11 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
     @Parameter(property = "docker.skip", defaultValue = "false")
     private boolean skip;
 
-    // Whether to restrict operation to a single image. This can be either
-    // the image or an alias name. It can also be comma separated list.
-    // This parameter is typically set via the command line.
+    /**
+     * Whether to restrict operation to a single image. This can be either
+     * the image or an alias name. It can also be comma separated list.
+     * This parameter is typically set via the command line.
+     */
     @Parameter(property = "docker.image")
     private String image;
 
@@ -132,10 +144,15 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
     @Parameter
     Map authConfig;
 
-    // Relevant images configuration to use. This includes also references to external
-    // images
+    /**
+     * Image configurations configured directly.
+     */
     @Parameter
     private List<ImageConfiguration> images;
+
+    // Images resolved with external image resolvers and hooks for subclass to
+    // mangle the image configurations.
+    private List<ImageConfiguration> resolvedImages;
 
     // Handler dealing with authentication credentials
     private AuthConfigFactory authConfigFactory;
@@ -153,23 +170,70 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         if (!skip) {
-            log = new AnsiLogger(getLog(), useColor, verbose);
+            log = new AnsiLogger(getLog(), useColor, verbose, getLogPrefix());
             LogOutputSpecFactory logSpecFactory = new LogOutputSpecFactory(useColor, logStdout, logDate);
 
-            String minimalApiVersion = validateConfiguration(log);
+            // The 'real' images configuration to use (configured images + externally resolved images)
+            String minimalApiVersion = initImageConfiguration();
             DockerAccess access = null;
             try {
                 access = createDockerAccess(minimalApiVersion);
                 ServiceHub serviceHub = serviceHubFactory.createServiceHub(project, session, access, log, logSpecFactory);
                 executeInternal(serviceHub);
             } catch (DockerAccessException exp) {
-                log.error(exp.getMessage());
+                log.error("%s", exp.getMessage());
                 throw new MojoExecutionException(log.errorMessage(exp.getMessage()), exp);
+            } catch (MojoExecutionException exp) {
+                log.error("%s", exp.getMessage());
+                throw exp;
             } finally {
                 if (access != null) {
                     access.shutdown();
                 }
             }
+        }
+    }
+
+    protected String getLogPrefix() {
+        return AnsiLogger.DEFAULT_LOG_PREFIX;
+    }
+
+    // Resolve and customize image configuration
+    private String initImageConfiguration() {
+        // Resolve images
+        final Properties resolveProperties = project.getProperties();
+        resolvedImages = getResolvedImagesFromPluginContext();
+        if (resolvedImages != null) {
+            return getResolvedApiVersion();
+        }
+        resolvedImages = ConfigHelper.resolveImages(
+            images,                  // Unresolved images
+            new ConfigHelper.Resolver() {
+                    @Override
+                    public List<ImageConfiguration> resolve(ImageConfiguration image) {
+                        return imageConfigResolver.resolve(image, resolveProperties);
+                    }
+                },
+            image,                   // A filter which image to process
+            this);                     // customizer (can be overwritten by a subclass)
+
+        // Initialize configuration and detect minimal API version
+        String ret = ConfigHelper.initAndValidate(resolvedImages, apiVersion, createNameFormatter(project), log);
+        storeInPluginContext(resolvedImages, ret);
+        return ret;
+    }
+
+    // Customization hook for subclasses to influence the final configuration. This method is called
+    // before initialization and validation of the configuration.
+    public List<ImageConfiguration> customizeConfig(List<ImageConfiguration> imageConfigs) {
+        return imageConfigs;
+    }
+
+    private void storeInPluginContext(List<ImageConfiguration> resolvedImages, String apiVersion) {
+        Map ctx = getPluginContext();
+        ctx.put(CONTEXT_KEY_RESOLVED_IMAGES, resolvedImages);
+        if (apiVersion != null) {
+            ctx.put(CONTEXT_KEY_MINIMAL_API_VERSION, apiVersion);
         }
     }
 
@@ -191,7 +255,6 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
         return access;
     }
 
-
     /**
      * Override this if your mojo doesnt require access to a Docker host (like creating and attaching
      * docker tar archives)
@@ -200,17 +263,6 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
      */
     protected boolean isDockerAccessRequired() {
         return true;
-    }
-
-    // Return minimal required version
-    private String validateConfiguration(Logger log) {
-        String apiVersion = this.apiVersion;
-        if (images != null) {
-            for (ImageConfiguration imageConfiguration : images) {
-                apiVersion = EnvUtil.extractLargerVersion(apiVersion,imageConfiguration.validate(log));
-            }
-        }
-        return apiVersion;
     }
 
     /**
@@ -229,38 +281,28 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
      *
      * @return list of image configuration to use
      */
-    protected List<ImageConfiguration> getImages() {
-        log.info("Getting images for: " + project.getName());
-        List<ImageConfiguration> resolvedImages = resolveImages();
-        List<ImageConfiguration> ret = new ArrayList<>();
-        for (ImageConfiguration imageConfig : resolvedImages) {
-            if (matchesConfiguredImages(this.image, imageConfig)) {
-                ret.add(imageConfig);
-            }
-        }
-        return ret;
+    protected List<ImageConfiguration> getResolvedImages() {
+        return resolvedImages;
     }
 
-    private List<ImageConfiguration> resolveImages() {
-        List<ImageConfiguration> ret = new ArrayList<>();
-        if (images != null) {
-            for (ImageConfiguration image : images) {
-                if(image.getName() != null) {
-                    ret.addAll(imageConfigResolver.resolve(image, project.getProperties()));
-                }
-            }
-        }
-        return ret;
+    // Look up resolved images from the plugin context where it has been
+    // potentially stored by another plugin
+    private List<ImageConfiguration> getResolvedImagesFromPluginContext() {
+         return (List<ImageConfiguration>) getPluginContext().get(CONTEXT_KEY_RESOLVED_IMAGES);
     }
 
-    // Check if the provided image configuration matches the given
-    protected boolean matchesConfiguredImages(String imageList, ImageConfiguration imageConfig) {
-        if (imageList == null) {
-            return true;
-        }
-        Set<String> imagesAllowed = new HashSet<>(Arrays.asList(imageList.split("\\s*,\\s*")));
-        return imagesAllowed.contains(imageConfig.getName()) || imagesAllowed.contains(imageConfig.getAlias());
+    // The minimal api version as detected during resolving of the image
+    // configuration.
+    private String getResolvedApiVersion() {
+        String minimalApiVersion = (String) getPluginContext().get(CONTEXT_KEY_MINIMAL_API_VERSION);
+        return  minimalApiVersion != null ? minimalApiVersion : apiVersion;
     }
+
+    // Used for formatting the image name
+    private ConfigHelper.NameFormatter createNameFormatter(MavenProject project) {
+        return new ImageNameFormatter(project);
+    }
+
 
     // Registry for managed containers
     private void setDockerHostAddressProperty(String dockerUrl) throws MojoFailureException {
@@ -327,17 +369,15 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
     /**
      * Check an image, and, if <code>autoPull</code> is set to true, fetch it. Otherwise if the image
      * is not existent, throw an error
-     *
-     * @param hub access object to lookup an image (if autoPull is enabled)
+     *  @param hub access object to lookup an image (if autoPull is enabled)
      * @param image image name
      * @param registry optional registry which is used if the image itself doesn't have a registry.
      * @param autoPullAlwaysAllowed whether an unconditional autopull is allowed.
-     *
      * @throws DockerAccessException
      * @throws MojoExecutionException
      */
     protected void checkImageWithAutoPull(ServiceHub hub, String image, String registry,
-            boolean autoPullAlwaysAllowed) throws DockerAccessException, MojoExecutionException {
+                                          boolean autoPullAlwaysAllowed) throws DockerAccessException, MojoExecutionException {
         // TODO: further refactoring could be done to avoid referencing the QueryService here
         QueryService queryService = hub.getQueryService();
         if (!queryService.imageRequiresAutoPull(autoPull, image, autoPullAlwaysAllowed)) {
@@ -346,7 +386,10 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
 
         DockerAccess docker = hub.getDockerAccess();
         ImageName imageName = new ImageName(image);
+        long time = System.currentTimeMillis();
         docker.pullImage(withLatestIfNoTag(image), prepareAuthConfig(imageName, registry, false), registry);
+        log.info("Pulled %s in %s", imageName.getFullName(), EnvUtil.formatDurationTill(time));
+
         if (registry != null && !imageName.hasRegistry()) {
             // If coming from a registry which was not contained in the original name, add a tag from the
             // full name with the registry to the short name with no-registry.

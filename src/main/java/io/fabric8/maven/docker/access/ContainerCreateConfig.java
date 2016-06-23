@@ -3,14 +3,16 @@ package io.fabric8.maven.docker.access;
 import java.io.*;
 import java.util.*;
 
+import io.fabric8.maven.docker.util.EnvUtil;
 import org.apache.commons.lang3.text.StrSubstitutor;
 import io.fabric8.maven.docker.config.Arguments;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ContainerCreateConfig {
-    final JSONObject createConfig = new JSONObject();
-    final String imageName;
+
+    private final JSONObject createConfig = new JSONObject();
+    private final String imageName;
 
     public ContainerCreateConfig(String imageName) {
         this.imageName = imageName;
@@ -54,9 +56,8 @@ public class ContainerCreateConfig {
         if (env != null && env.size() > 0) {
             for (Map.Entry<String, String> entry : env.entrySet()) {
                 String value = entry.getValue();
-                if (value == null || value.length() == 0) {
-                    throw new IllegalArgumentException(String.format("Env variable '%s' must not be null or empty",
-                                                                     entry.getKey()));
+                if (value == null) {
+                    value = "";
                 }
                 envProps.put(entry.getKey(), StrSubstitutor.replace(value, mavenProps));
             }
@@ -98,14 +99,6 @@ public class ContainerCreateConfig {
         return add("Hostname", hostname);
     }
 
-    public ContainerCreateConfig memory(Long memory) {
-        return add("Memory", memory);
-    }
-
-    public ContainerCreateConfig memorySwap(Long memorySwap) {
-        return add("MemorySwap", memorySwap);
-    }
-
     public ContainerCreateConfig user(String user) {
         return add("User", user);
     }
@@ -137,13 +130,14 @@ public class ContainerCreateConfig {
     }
 
     private String extractContainerPath(String volume) {
-        if (volume.contains(":")) {
-            String[] parts = volume.split(":");
+        String path  = EnvUtil.fixupPath(volume);
+        if (path.contains(":")) {
+            String[] parts = path.split(":");
             if (parts.length > 1) {
                 return parts[1];
             }
         }
-        return volume;
+        return path;
     }
 
     private void addEnvironment(Properties envProps) {
@@ -152,8 +146,8 @@ public class ContainerCreateConfig {
         while (keys.hasMoreElements()) {
             String key = (String) keys.nextElement();
             String value = envProps.getProperty(key);
-            if (value == null || value.length() == 0) {
-                throw new IllegalArgumentException(String.format("Env variable '%s' must not be null or empty",key));
+            if (value == null) {
+                value = "";
             }
             containerEnv.put(key + "=" + value);
         }

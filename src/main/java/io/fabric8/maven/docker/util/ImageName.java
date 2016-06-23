@@ -1,5 +1,7 @@
 package io.fabric8.maven.docker.util;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,7 +56,7 @@ public class ImageName {
      * @param fullName The fullname of the image in Docker format. I
      * @param givenTag tag to use. Can be null in which case the tag specified in fullName is used.
      */
-    public ImageName(String fullName,String givenTag) {
+    public ImageName(String fullName, String givenTag) {
         if (fullName == null) {
             throw new NullPointerException("Image name must not be null");
         }
@@ -76,14 +78,21 @@ public class ImageName {
         } else if (parts.length >= 2) {
             if (isRegistry(parts[0])) {
                 registry = parts[0];
-                user = parts[1];
-                repository = joinTail(parts);
+                if (parts.length > 2) {
+                    user = parts[1];
+                    repository = joinTail(parts);
+                } else {
+                    user = null;
+                    repository = parts[1];
+                }
             } else {
                 registry = null;
                 user = parts[0];
                 repository = rest;
             }
         }
+
+        doValidate();
     }
 
     public String getRepository() {
@@ -178,4 +187,59 @@ public class ImageName {
     public String getUser() {
         return user;
     }
+
+    /**
+     * Check whether the given name validates agains the Docker rules for names
+     *
+     * @param image image name to validate
+     * d@throws IllegalArgumentException if the name doesnt validate
+     */
+    public static void validate(String image) {
+        // Validation will be triggered during construction
+        new ImageName(image);
+    }
+    // ================================================================================================
+
+    // Validations patterns, taken directly from the docker source
+    // https://github.com/docker/docker/blob/master/vendor/src/github.com/docker/distribution/reference/regexp.go
+    // https://github.com/docker/docker/blob/master/vendor/src/github.com/docker/distribution/reference/reference.go
+    private final String nameComponentRegexp = "[a-z0-9]+(?:(?:[._]|__|[-]*)[a-z0-9]+)*";
+    private final String hostnameComponentRegexp = "(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])";
+    private final String hostnameRegexp = hostnameComponentRegexp + "(?:(?:\\." + hostnameComponentRegexp + ")+)?(?::[0-9]+)?";
+    private final Pattern NAME_COMP_REGEXP = Pattern.compile(nameComponentRegexp);
+    private final Pattern IMAGE_NAME_REGEXP = Pattern.compile("(?:" + hostnameRegexp + "/)?" + nameComponentRegexp + "(?:/" + nameComponentRegexp + ")?");
+    private final Pattern REGISTRY_REGEXP = Pattern.compile("^" + hostnameComponentRegexp + "(?:\\." + hostnameComponentRegexp + ")*(?::[0-9]+)?$");
+    private final Pattern TAG_REGEXP = Pattern.compile("^[\\w][\\w.-]{0,127}$");
+
+    // Validate parts and throw an IllegalArgumentException if a part is not valid
+    private void doValidate() {
+        List<String> errors = new ArrayList<>();
+        // Stripp of user from repository name
+        String image = user != null ? repository.substring(user.length() + 1) : repository;
+        Object[] checks = new Object[] {
+            "registry", REGISTRY_REGEXP, registry,
+            "image", IMAGE_NAME_REGEXP, image,
+            "user", NAME_COMP_REGEXP, user,
+            "tag", TAG_REGEXP, tag
+        };
+        for (int i = 0; i < checks.length; i +=3) {
+            String value = (String) checks[i + 2];
+            Pattern checkPattern = (Pattern) checks[i + 1];
+            if (value != null &&
+                !checkPattern.matcher(value).matches()) {
+                errors.add(String.format("%s part '%s' doesn't match allowed pattern '%s'",
+                                         checks[i], value, checkPattern.pattern()));
+            }
+        }
+        if (errors.size() > 0) {
+            StringBuilder buf = new StringBuilder();
+            buf.append(String.format("Given repository name '%s' is invalid:\n",getFullName()));
+            for (String error : errors) {
+                buf.append(String.format("   * %s\n",error));
+            }
+            buf.append("See http://bit.ly/docker_image_format for more details");
+            throw new IllegalArgumentException(buf.toString());
+        }
+    }
+
 }

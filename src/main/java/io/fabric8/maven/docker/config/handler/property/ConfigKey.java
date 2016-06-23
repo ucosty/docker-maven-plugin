@@ -15,6 +15,8 @@ package io.fabric8.maven.docker.config.handler.property;/*
  * limitations under the License.
  */
 
+import static io.fabric8.maven.docker.assembly.DockerFileKeyword.WORKDIR;
+
 /**
  * Enum holding possible configuration keys
  *
@@ -24,6 +26,7 @@ package io.fabric8.maven.docker.config.handler.property;/*
 public enum ConfigKey {
 
     ALIAS,
+    ARGS,
     ASSEMBLY_BASEDIR("assembly.baseDir"),
     ASSEMBLY_DESCRIPTOR("assembly.descriptor"),
     ASSEMBLY_DESCRIPTOR_REF("assembly.descriptorRef"),
@@ -42,13 +45,15 @@ public enum ConfigKey {
     DOMAINNAME,
     DNS,
     DNS_SEARCH,
+    DOCKER_FILE,
+    DOCKER_FILE_DIR,
     ENTRYPOINT,
     ENV,
-    LABELS,
     ENV_PROPERTY_FILE,
     EXTRA_HOSTS,
     FROM,
     HOSTNAME,
+    LABELS,
     LINKS,
     LOG_ENABLED("log.enabled"),
     LOG_PREFIX("log.prefix"),
@@ -56,6 +61,7 @@ public enum ConfigKey {
     LOG_COLOR("log.color"),
     LOG_DRIVER_NAME("log.driver.name"),
     LOG_DRIVER_OPTS("log.driver.opts"),
+    MAINTAINER,
     MEMORY,
     MEMORY_SWAP,
     NAME,
@@ -63,22 +69,21 @@ public enum ConfigKey {
     NET,
     PORT_PROPERTY_FILE,
     PORTS,
-    RUN,
+    POST_START("wait.exec.postStart"),
+    PRE_STOP("wait.exec.preStop"),
     PRIVILEGED,
     REGISTRY,
     RESTART_POLICY_NAME("restartPolicy.name"),
     RESTART_POLICY_RETRY("restartPolicy.retry"),
+    RUN,
+    SHMSIZE,
     SKIP_BUILD("skip.build"),
     SKIP_RUN("skip.run"),
+    TAGS,
     USER,
     VOLUMES,
-    TAGS,
-    MAINTAINER,
-    WORKDIR,
     VOLUMES_FROM,
     WAIT_LOG("wait.log"),
-    POST_START("wait.exec.postStart"),
-    PRE_STOP("wait.exec.preStop"),
     WAIT_TIME("wait.time"),
     WAIT_URL("wait.url"),
     WAIT_HTTP_URL("wait.http.url"),
@@ -91,6 +96,7 @@ public enum ConfigKey {
     WATCH_INTERVAL("watch.interval"),
     WATCH_MODE("watch.mode"),
     WATCH_POSTGOAL("watch.postGoal"),
+    WORKDIR,
     WORKING_DIR;
 
     ConfigKey() {

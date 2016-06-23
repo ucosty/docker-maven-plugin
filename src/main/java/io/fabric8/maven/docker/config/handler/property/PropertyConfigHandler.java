@@ -67,6 +67,7 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
                 .entryPoint(withPrefix(prefix, ENTRYPOINT, properties))
                 .assembly(extractAssembly(prefix, properties))
                 .env(mapWithPrefix(prefix, ENV, properties))
+                .args(mapWithPrefix(prefix, ARGS, properties))
                 .labels(mapWithPrefix(prefix,LABELS,properties))
                 .ports(extractPortValues(prefix, properties))
                 .runCmds(extractRunCommands(prefix,properties))
@@ -76,7 +77,10 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
                 .tags(listWithPrefix(prefix, TAGS, properties))
                 .maintainer(withPrefix(prefix, MAINTAINER, properties))
                 .workdir(withPrefix(prefix, WORKDIR, properties))
-                .skip(withPrefix(prefix, ConfigKey.SKIP_BUILD, properties))
+                .skip(withPrefix(prefix, SKIP_BUILD, properties))
+                .dockerFile(withPrefix(prefix, DOCKER_FILE, properties))
+                .dockerFileDir(withPrefix(prefix, DOCKER_FILE_DIR, properties))
+                .user(withPrefix(prefix, USER, properties))
                 .build();
     }
 
@@ -102,6 +106,7 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
                 .namingStrategy(withPrefix(prefix, NAMING_STRATEGY, properties))
                 .portPropertyFile(withPrefix(prefix, PORT_PROPERTY_FILE, properties))
                 .ports(listWithPrefix(prefix, PORTS, properties))
+                .shmSize(longWithPrefix(prefix, SHMSIZE, properties))
                 .privileged(booleanWithPrefix(prefix, PRIVILEGED, properties))
                 .restartPolicy(extractRestartPolicy(prefix, properties))
                 .user(withPrefix(prefix, USER, properties))
@@ -109,7 +114,7 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
                 .log(extractLogConfig(prefix,properties))
                 .wait(extractWaitConfig(prefix, properties))
                 .volumes(extractVolumeConfig(prefix, properties))
-                .skip(withPrefix(prefix, ConfigKey.SKIP_RUN, properties))
+                .skip(withPrefix(prefix, SKIP_RUN, properties))
                 .build();
     }
 

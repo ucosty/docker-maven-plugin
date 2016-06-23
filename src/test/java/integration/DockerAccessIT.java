@@ -2,11 +2,12 @@ package integration;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
 import com.google.common.collect.Lists;
-import edu.emory.mathcs.backport.java.util.Arrays;
 import io.fabric8.maven.docker.access.*;
 import io.fabric8.maven.docker.util.AnsiLogger;
 import io.fabric8.maven.docker.util.EnvUtil;
@@ -18,7 +19,6 @@ import io.fabric8.maven.docker.config.Arguments;
 import io.fabric8.maven.docker.model.Container.PortBinding;
 import org.junit.*;
 
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.*;
 
 /*
@@ -53,7 +53,7 @@ public class DockerAccessIT {
     @Ignore
     public void testBuildImage() throws DockerAccessException {
         File file = new File("src/test/resources/integration/busybox-test.tar");
-        dockerClient.buildImage(IMAGE_TAG, file, false, false);
+        dockerClient.buildImage(IMAGE_TAG, file, null, false, false, Collections.<String, String>emptyMap());
         assertTrue(hasImage(IMAGE_TAG));
 
         testRemoveImage(IMAGE_TAG);
@@ -87,7 +87,7 @@ public class DockerAccessIT {
     }
 
     private void testCreateContainer() throws DockerAccessException {
-        PortMapping portMapping = new PortMapping(Arrays.asList(new Object[] {PORT + ":" + PORT }), new Properties());
+        PortMapping portMapping = new PortMapping(Arrays.asList(new String[] {PORT + ":" + PORT }), new Properties());
         ContainerHostConfig hostConfig = new ContainerHostConfig().portBindings(portMapping);
         ContainerCreateConfig createConfig = new ContainerCreateConfig(IMAGE).command(new Arguments("ping google.com")).hostConfig(hostConfig);
 
