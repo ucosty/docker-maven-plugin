@@ -230,6 +230,7 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
      * @return list of image configuration to use
      */
     protected List<ImageConfiguration> getImages() {
+        log.info("Getting images for: " + project.getName());
         List<ImageConfiguration> resolvedImages = resolveImages();
         List<ImageConfiguration> ret = new ArrayList<>();
         for (ImageConfiguration imageConfig : resolvedImages) {
@@ -244,20 +245,12 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements Context
         List<ImageConfiguration> ret = new ArrayList<>();
         if (images != null) {
             for (ImageConfiguration image : images) {
-                ret.addAll(imageConfigResolver.resolve(image, project.getProperties()));
+                if(image.getName() != null) {
+                    ret.addAll(imageConfigResolver.resolve(image, project.getProperties()));
+                }
             }
-            verifyImageNames(ret);
         }
         return ret;
-    }
-
-    // Extract authentication information
-    private void verifyImageNames(List<ImageConfiguration> ret) {
-        for (ImageConfiguration config : ret) {
-            if (config.getName() == null) {
-                throw new IllegalArgumentException("Configuration error: <image> must have a non-null <name>");
-            }
-        }
     }
 
     // Check if the provided image configuration matches the given
