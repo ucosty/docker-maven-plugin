@@ -20,6 +20,7 @@ import java.util.*;
 
 import io.fabric8.maven.docker.config.*;
 import io.fabric8.maven.docker.config.handler.AbstractConfigHandlerTest;
+import io.fabric8.maven.docker.util.MojoParameters;
 import mockit.Expectations;
 import mockit.Mocked;
 import mockit.integration.junit4.JMockit;
@@ -157,7 +158,24 @@ public class PropertyConfigHandlerTest extends AbstractConfigHandlerTest {
         String[] testData = new String[] { k(ConfigKey.NAME), "image", k(ConfigKey.DOCKER_FILE_DIR), "src/main/docker/" };
         ImageConfiguration config = resolveExternalImageConfig(testData);
         config.initAndValidate(ConfigHelper.NameFormatter.IDENTITY, null);
+        assertTrue(config.getBuildConfiguration().isDockerFileMode());
         assertEquals(new File("src/main/docker/Dockerfile"), config.getBuildConfiguration().getDockerFile());
+    }
+
+    @Test
+    public void testDockerArchive() {
+        String[] testData = new String[] { k(ConfigKey.NAME), "image", k(ConfigKey.DOCKER_ARCHIVE), "dockerLoad.tar" };
+        ImageConfiguration config = resolveExternalImageConfig(testData);
+        config.initAndValidate(ConfigHelper.NameFormatter.IDENTITY, null);
+        assertFalse(config.getBuildConfiguration().isDockerFileMode());
+        assertEquals(new File("dockerLoad.tar"), config.getBuildConfiguration().getDockerArchive());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidDockerFileArchiveConfig() {
+        String[] testData = new String[] { k(ConfigKey.NAME), "image", k(ConfigKey.DOCKER_FILE_DIR),  "src/main/docker/", k(ConfigKey.DOCKER_ARCHIVE), "dockerLoad.tar" };
+        ImageConfiguration config = resolveExternalImageConfig(testData);
+        config.initAndValidate(ConfigHelper.NameFormatter.IDENTITY, null);
     }
 
     @Test
@@ -262,6 +280,7 @@ public class PropertyConfigHandlerTest extends AbstractConfigHandlerTest {
         validateEnv(buildConfig.getEnv());
         validateLabels(buildConfig.getLabels());
         validateArgs(buildConfig.getArgs());
+        validateBuildOptions(buildConfig.getBuildOptions());
         /*
          * validate only the descriptor is required and defaults are all used, 'testAssembly' validates
          * all options can be set
@@ -281,6 +300,10 @@ public class PropertyConfigHandlerTest extends AbstractConfigHandlerTest {
 
     private void validateLabels(Map<String, String> labels) {
         assertEquals("Hello\"World",labels.get("com.acme.label"));
+    }
+
+    private void validateBuildOptions(Map<String,String> buildOptions) {
+        assertEquals("2147483648", buildOptions.get("shmsize"));
     }
 
     protected void validateRunConfiguration(RunImageConfiguration runConfig) {
@@ -383,6 +406,7 @@ public class PropertyConfigHandlerTest extends AbstractConfigHandlerTest {
             k(ConfigKey.ENV) + ".HOME", "/Users/roland",
             k(ConfigKey.ARGS) + ".PROXY", "http://proxy",
             k(ConfigKey.LABELS) + ".com.acme.label", "Hello\"World",
+            k(ConfigKey.BUILD_OPTIONS) + ".shmsize", "2147483648",
             k(ConfigKey.ENV_PROPERTY_FILE), "/tmp/envProps.txt",
             k(ConfigKey.EXTRA_HOSTS) + ".1", "localhost:127.0.0.1",
             k(ConfigKey.FROM), "image",

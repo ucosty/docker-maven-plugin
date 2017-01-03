@@ -1,6 +1,7 @@
 package io.fabric8.maven.docker.service;
 
 import com.google.common.collect.ImmutableMap;
+import io.fabric8.maven.docker.access.BuildOptions;
 import io.fabric8.maven.docker.access.DockerAccess;
 import io.fabric8.maven.docker.access.DockerAccessException;
 import io.fabric8.maven.docker.config.BuildImageConfiguration;
@@ -31,7 +32,7 @@ public class BuildService {
 
     /**
      * Build an image
-     * 
+     *
      * @param imageConfig the image configuration
      * @param params mojo params for the project
      * @param noCache if not null, dictate the caching behaviour. Otherwise its taken from the build configuration
@@ -55,18 +56,26 @@ public class BuildService {
         }
 
         long time = System.currentTimeMillis();
+
+        if (buildConfig.getDockerArchive() != null) {
+            docker.loadImage(imageName, buildConfig.getAbsoluteDockerTarPath(params));
+            log.info("%s: Loaded tarball in %s", buildConfig.getDockerArchive(), EnvUtil.formatDurationTill(time));
+            return;
+        }
+
         File dockerArchive = archiveService.createArchive(imageName, buildConfig, params, log);
         log.info("%s: Created %s in %s", dockerArchive.getName(), imageConfig.getDescription(), EnvUtil.formatDurationTill(time));
 
         Map<String, String> mergedBuildMap = prepareBuildArgs(buildArgs, buildConfig);
 
         // auto is now supported by docker, consider switching?
-        String newImageId =
-                doBuildImage(imageName,
-                             dockerArchive,
-                             getDockerfileName(buildConfig),
-                             cleanupMode.isRemove(),
-                             noCache, mergedBuildMap);
+        BuildOptions opts =
+            new BuildOptions(buildConfig.getBuildOptions())
+            .dockerfile(getDockerfileName(buildConfig))
+            .forceRemove(cleanupMode.isRemove())
+            .noCache(noCache)
+            .buildArgs(mergedBuildMap);
+        String newImageId = doBuildImage(imageName, dockerArchive, opts);
         log.info("%s: Built image %s",imageConfig.getDescription(), newImageId);
 
         if (oldImageId != null && !oldImageId.equals(newImageId)) {
@@ -85,11 +94,10 @@ public class BuildService {
     }
 
     private Map<String, String> prepareBuildArgs(Map<String, String> buildArgs, BuildImageConfiguration buildConfig) {
-        ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String>builder().
-                putAll(buildArgs);
-            if(buildConfig.getArgs() != null){
-                builder.putAll(buildConfig.getArgs());
-            }
+        ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String>builder().putAll(buildArgs);
+        if (buildConfig.getArgs() != null) {
+            builder.putAll(buildConfig.getArgs());
+        }
         return builder.build();
     }
 
@@ -103,9 +111,9 @@ public class BuildService {
 
     // ===============================================================
 
-    private String doBuildImage(String imageName, File dockerArchive, String dockerfileName, boolean cleanUp, boolean noCache, Map<String, String> buildArgs)
+    private String doBuildImage(String imageName, File dockerArchive, BuildOptions options)
         throws DockerAccessException, MojoExecutionException {
-        docker.buildImage(imageName, dockerArchive, dockerfileName, cleanUp, noCache, buildArgs);
+        docker.buildImage(imageName, dockerArchive, options);
         return queryService.getImageId(imageName);
     }
 

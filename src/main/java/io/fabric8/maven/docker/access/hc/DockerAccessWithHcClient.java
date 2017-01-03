@@ -14,24 +14,22 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import io.fabric8.maven.docker.access.hc.util.ClientBuilder;
+import io.fabric8.maven.docker.access.*;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.ResponseHandler;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import io.fabric8.maven.docker.access.AuthConfig;
-import io.fabric8.maven.docker.access.ContainerCreateConfig;
-import io.fabric8.maven.docker.access.DockerAccess;
-import io.fabric8.maven.docker.access.DockerAccessException;
-import io.fabric8.maven.docker.access.NetworkCreateConfig;
-import io.fabric8.maven.docker.access.UrlBuilder;
 import io.fabric8.maven.docker.access.chunked.BuildJsonResponseHandler;
 import io.fabric8.maven.docker.access.chunked.EntityStreamReaderUtil;
 import io.fabric8.maven.docker.access.chunked.PullOrPushResponseJsonHandler;
@@ -39,6 +37,7 @@ import io.fabric8.maven.docker.access.hc.ApacheHttpClientDelegate.BodyAndStatusR
 import io.fabric8.maven.docker.access.hc.ApacheHttpClientDelegate.HttpBodyAndStatus;
 import io.fabric8.maven.docker.access.hc.http.HttpClientBuilder;
 import io.fabric8.maven.docker.access.hc.unix.UnixSocketClientBuilder;
+import io.fabric8.maven.docker.access.hc.util.ClientBuilder;
 import io.fabric8.maven.docker.access.hc.win.NamedPipeClientBuilder;
 import io.fabric8.maven.docker.access.log.LogCallback;
 import io.fabric8.maven.docker.access.log.LogGetHandle;
@@ -57,16 +56,16 @@ import io.fabric8.maven.docker.util.Logger;
 import io.fabric8.maven.docker.util.Timestamp;
 
 /**
- * Implementation using <a href="http://hc.apache.org/">Apache HttpComponents</a> for accessing
- * remotely the docker host.
+ * Implementation using <a href="http://hc.apache.org/">Apache HttpComponents</a>
+ * for remotely accessing the docker host.
  * <p/>
  * The design goal here is to provide only the functionality required for this plugin in order to
- * make it as robust as possible agains docker API changes (which happen quite frequently). That's
+ * make it as robust as possible against docker API changes (which happen quite frequently). That's
  * also the reason, why no framework like JAX-RS or docker-java is used so that the dependencies are
  * kept low.
  * <p/>
- * Of course, it's a bit more manual work, but it's worth the effort (as long as the Docker API
- * functionality required is not to much).
+ * Of course, it's a bit more manual work, but it's worth the effort
+ * (as long as the Docker API functionality required is not too much).
  *
  * @author roland
  * @since 26.03.14
@@ -153,11 +152,14 @@ public class DockerAccessWithHcClient implements DockerAccess {
                     LineNumberReader reader = new LineNumberReader(new InputStreamReader(stream));
                     String line;
                     try {
+                        callback.open();
                         while ( (line = reader.readLine()) != null) {
                             callback.log(1, new Timestamp(), line);
                         }
                     } catch (LogCallback.DoneException e) {
                         // Ok, we stop here ...
+                    } finally {
+                        callback.close();
                     }
                 }
                 return null;
@@ -233,10 +235,9 @@ public class DockerAccessWithHcClient implements DockerAccess {
     }
 
     @Override
-    public void buildImage(String image, File dockerArchive, String dockerfileName, boolean forceRemove, boolean noCache,
-            Map<String, String> buildArgs) throws DockerAccessException {
+    public void buildImage(String image, File dockerArchive, BuildOptions options) throws DockerAccessException {
         try {
-            String url = urlBuilder.buildImage(image, dockerfileName, forceRemove, noCache, buildArgs);
+            String url = urlBuilder.buildImage(image, options);
             delegate.post(url, dockerArchive, createBuildResponseHandler(), HTTP_OK);
         } catch (IOException e) {
             throw new DockerAccessException(e, "Unable to build image [%s]", image);
@@ -357,6 +358,17 @@ public class DockerAccessWithHcClient implements DockerAccess {
     }
 
     @Override
+    public void loadImage(String image, File tarArchive) throws DockerAccessException {
+        String url = urlBuilder.loadImage();
+
+        try {
+            delegate.post(url, tarArchive, new BodyAndStatusResponseHandler(), HTTP_OK);
+        } catch (IOException e) {
+            throw new DockerAccessException(e, "Unable to load %s", tarArchive);
+        }
+    }
+
+    @Override
     public void pullImage(String image, AuthConfig authConfig, String registry)
             throws DockerAccessException {
         ImageName name = new ImageName(image);
@@ -470,6 +482,44 @@ public class DockerAccessWithHcClient implements DockerAccess {
             throw new DockerAccessException(e, "Unable to remove network [%s]", networkId);
         }
     }
+
+    @Override
+    public String createVolume(VolumeCreateConfig containerConfig)
+           throws DockerAccessException
+    {
+        String createJson = containerConfig.toJson();
+        log.debug("Volume create config: %s", createJson);
+
+        try
+        {
+            String url = urlBuilder.createVolume();
+            String response =
+                    delegate.post(url,
+                                  createJson,
+                                  new ApacheHttpClientDelegate.BodyResponseHandler(),
+                                  HTTP_CREATED);
+            JSONObject json = new JSONObject(response);
+            logWarnings(json);
+
+            return json.getString("Name");
+        }
+        catch (IOException e)
+        {
+           throw new DockerAccessException(e, "Unable to create volume for [%s]",
+                                           containerConfig.getName());
+        }
+    }
+
+    @Override
+    public void removeVolume(String name) throws DockerAccessException {
+        try {
+            String url = urlBuilder.removeVolume(name);
+            delegate.delete(url, HTTP_NO_CONTENT);
+        } catch (IOException e) {
+            throw new DockerAccessException(e, "Unable to remove volume [%s]", name);
+        }
+    }
+
 
     // ---------------
     // Lifecycle methods not needed here

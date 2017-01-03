@@ -20,17 +20,11 @@ public final class UrlBuilder {
         this.baseUrl = stripSlash(baseUrl);
     }
 
-    public String buildImage(String image, String dockerfileName, boolean forceRemove, boolean noCache, Map<String, String> buildArgs) {
-
+    public String buildImage(String image, BuildOptions options) {
         Builder urlBuilder = u("build")
-            .p("t", image)
-            .p(forceRemove ? "forcerm" : "rm", true)
-            .p("nocache", noCache);
-        if (buildArgs != null && !buildArgs.isEmpty()) {
-            urlBuilder.p("buildargs", new JSONObject(buildArgs).toString());
-        }
-        if (dockerfileName != null) {
-            urlBuilder.p("dockerfile",dockerfileName);
+            .p("t", image);
+        if (options != null) {
+            urlBuilder.p(options.getOptions());
         }
         return urlBuilder.build();
     }
@@ -78,19 +72,13 @@ public final class UrlBuilder {
 
     public String listContainers(String ... filter) {
         Builder builder = u("containers/json");
-        if (filter.length > 0) {
-            if (filter.length % 2 != 0) {
-                throw new IllegalArgumentException("Filters must be given as key value pairs and not " +Arrays.asList(filter));
-            }
-            JSONObject filters = new JSONObject();
-            for (int i = 0; i < filter.length; i +=2) {
-                JSONArray value = new JSONArray();
-                value.put(filter[i+1]);
-                filters.put(filter[i],value);
-            }
-            builder.p("filters",filters.toString());
-        }
+        addFilters(builder, filter);
         return builder.build();
+    }
+
+    public String loadImage() {
+        return u("images/load")
+            .build();
     }
 
     public String pullImage(ImageName name, String registry) {
@@ -160,6 +148,14 @@ public final class UrlBuilder {
                 .build();
     }
 
+    public String createVolume() {
+       return u("volumes/create").build();
+    }
+
+    public String removeVolume(String name) {
+       return u("volumes/%s", name).build();
+    }
+
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -203,6 +199,20 @@ public final class UrlBuilder {
         return String.format("%s/%s/%s", baseUrl, apiVersion, path);
     }
 
+    private void addFilters(Builder builder, String... filter) {
+       if (filter.length > 0) {
+           if (filter.length % 2 != 0) {
+               throw new IllegalArgumentException("Filters must be given as key value pairs and not " + Arrays.asList(filter));
+           }
+           JSONObject filters = new JSONObject();
+           for (int i = 0; i < filter.length; i +=2) {
+               JSONArray value = new JSONArray();
+               value.put(filter[i+1]);
+               filters.put(filter[i],value);
+           }
+           builder.p("filters",filters.toString());
+       }
+    }
 
     private static class Builder {
 
@@ -211,6 +221,11 @@ public final class UrlBuilder {
 
         public Builder(String url) {
             this.url = url;
+        }
+
+        private Builder p(Map<String, String> params) {
+            queryParams.putAll(params);
+            return this;
         }
 
         private Builder p(String key, String value) {
@@ -232,10 +247,11 @@ public final class UrlBuilder {
             if (queryParams.size() > 0) {
                 StringBuilder ret = new StringBuilder(url);
                 ret.append("?");
-                for (Map.Entry<String, String> entry : queryParams.entrySet()) {
-                    ret.append(entry.getKey())
+                // Sort to make order predictable e.g. for unit testing
+                for (String key : new TreeSet<>(queryParams.keySet())) {
+                    ret.append(key)
                        .append("=")
-                       .append(encode(entry.getValue()))
+                       .append(encode(queryParams.get(key)))
                        .append("&");
                 }
                 return ret.substring(0,ret.length() - 1);

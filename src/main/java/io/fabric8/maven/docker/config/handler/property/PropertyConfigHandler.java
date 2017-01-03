@@ -85,6 +85,8 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
                 .maintainer(withPrefix(prefix, MAINTAINER, properties))
                 .workdir(withPrefix(prefix, WORKDIR, properties))
                 .skip(withPrefix(prefix, SKIP_BUILD, properties))
+                .dockerArchive(withPrefix(prefix, DOCKER_ARCHIVE, properties))
+                .buildOptions(mapWithPrefix(prefix, BUILD_OPTIONS, properties))
                 .dockerFile(withPrefix(prefix, DOCKER_FILE, properties))
                 .dockerFileDir(withPrefix(prefix, DOCKER_FILE_DIR, properties))
                 .user(withPrefix(prefix, USER, properties))
@@ -265,8 +267,8 @@ public class PropertyConfigHandler implements ExternalConfigHandler {
         return ret;
     }
 
-    private VolumeConfiguration extractVolumeConfig(String prefix, Properties properties) {
-        return new VolumeConfiguration.Builder()
+    private RunVolumeConfiguration extractVolumeConfig(String prefix, Properties properties) {
+        return new RunVolumeConfiguration.Builder()
                 .bind(listWithPrefix(prefix, BIND, properties))
                 .from(listWithPrefix(prefix, VOLUMES_FROM, properties))
                 .build();

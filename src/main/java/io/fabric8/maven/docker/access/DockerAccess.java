@@ -1,7 +1,6 @@
 package io.fabric8.maven.docker.access;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -151,6 +150,15 @@ public interface DockerAccess {
     void removeContainer(String containerId, boolean removeVolumes) throws DockerAccessException;
 
     /**
+     * Load an image from an archive.
+     *
+     * @param image the image to pull.
+     * @param tarArchive archive file
+     * @throws DockerAccessException if the image couldn't be loaded.
+     */
+    void loadImage(String image, File tarArchive) throws DockerAccessException;
+
+    /**
      * Pull an image from a remote registry and store it locally.
      *
      * @param image the image to pull.
@@ -180,13 +188,10 @@ public interface DockerAccess {
      *
      * @param image name of the image to build or <code>null</code> if none should be used
      * @param dockerArchive from which the docker image should be build
-     * @param dockerfileName filename of the Dockerfile within the archive or <code>null</code> for the default Dockerfile
-     * @param forceRemove whether to remove intermediate containers
-     * @param noCache whether to use cache when building the image
-     * @param buildArgs buildArgs to add then building the image. Can be <code>null</code> for no build args.    @throws DockerAccessException if docker host reports an error during building of an image
+     * @param options additional query arguments to add when building the image. Can be null.
+     * @throws DockerAccessException if docker host reports an error during building of an image
      */
-    void buildImage(String image, File dockerArchive, String dockerfileName, boolean forceRemove, boolean noCache,
-                    Map<String, String> buildArgs) throws DockerAccessException;
+    void buildImage(String image, File dockerArchive, BuildOptions options) throws DockerAccessException;
 
     /**
      * Alias an image in the repository with a complete new name. (Note that this maps to a Docker Remote API 'tag'
@@ -235,7 +240,6 @@ public interface DockerAccess {
      */
     boolean removeNetwork(String networkId) throws DockerAccessException;
 
-
     /**
      * Lifecycle method for this access class which must be called before any other method is called.
      */
@@ -246,4 +250,20 @@ public interface DockerAccess {
      * cleaning up things.
      */
     void shutdown();
+
+   /**
+    *  Create a volume
+    *
+    *  @param configuration volume configuration
+    *  @return the name of the Volume
+    *  @throws DockerAccessException if the volume could not be created.
+    */
+   String createVolume(VolumeCreateConfig configuration) throws DockerAccessException;
+
+   /**
+    * removes a volume
+    * @param name volume name to remove
+    * @throws DockerAccessException if the volume could not be removed
+    */
+   void removeVolume(String name) throws DockerAccessException;
 }
