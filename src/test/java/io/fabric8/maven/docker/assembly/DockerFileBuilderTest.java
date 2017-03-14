@@ -6,6 +6,9 @@ import java.util.regex.Pattern;
 
 import com.google.common.collect.ImmutableMap;
 import io.fabric8.maven.docker.config.Arguments;
+import io.fabric8.maven.docker.config.HealthCheckConfiguration;
+import io.fabric8.maven.docker.config.HealthCheckMode;
+
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
 
@@ -33,6 +36,74 @@ public class DockerFileBuilderTest {
         String expected = loadFile("docker/Dockerfile.test");
         assertEquals(expected, stripCR(dockerfileContent));
     }
+    
+    @Test
+    public void testBuildDockerFileUDPPort() throws Exception {
+        Arguments a = Arguments.Builder.get().withParam("c1").withParam("c2").build();
+        String dockerfileContent = new DockerFileBuilder().add("/src", "/dest")
+                .baseImage("image")
+                .cmd(a)
+                .basedir("/export")
+                .expose(Collections.singletonList("8080/udp"))
+                .maintainer("maintainer@example.com")
+                .workdir("/tmp")
+                .volumes(Collections.singletonList("/vol1"))
+                .run(Arrays.asList("echo something", "echo second"))
+                .content();
+        String expected = loadFile("docker/Dockerfile_udp.test");
+        assertEquals(expected, stripCR(dockerfileContent));
+    }
+
+    @Test
+    public void testBuildDockerFileExplicitTCPPort() throws Exception {
+        Arguments a = Arguments.Builder.get().withParam("c1").withParam("c2").build();
+        String dockerfileContent = new DockerFileBuilder().add("/src", "/dest")
+                .baseImage("image")
+                .cmd(a)
+                .basedir("/export")
+                .expose(Collections.singletonList("8080/tcp"))
+                .maintainer("maintainer@example.com")
+                .workdir("/tmp")
+                .volumes(Collections.singletonList("/vol1"))
+                .run(Arrays.asList("echo something", "echo second"))
+                .content();
+        String expected = loadFile("docker/Dockerfile_tcp.test");
+        assertEquals(expected, stripCR(dockerfileContent));
+    }
+    
+    @Test(expected=IllegalArgumentException.class)
+    public void testBuildDockerFileBadPort() throws Exception {
+        Arguments a = Arguments.Builder.get().withParam("c1").withParam("c2").build();
+        new DockerFileBuilder().add("/src", "/dest")
+                .baseImage("image")
+                .cmd(a)
+                .env(ImmutableMap.of("foo", "bar"))
+                .basedir("/export")
+                .expose(Collections.singletonList("8080aaa/udp"))
+                .maintainer("maintainer@example.com")
+                .workdir("/tmp")
+                .labels(ImmutableMap.of("com.acme.foobar", "How are \"you\" ?"))
+                .volumes(Collections.singletonList("/vol1"))
+                .run(Arrays.asList("echo something", "echo second"))
+                .content();
+    }    
+
+    @Test(expected=IllegalArgumentException.class)
+    public void testBuildDockerFileBadProtocol() throws Exception {
+        Arguments a = Arguments.Builder.get().withParam("c1").withParam("c2").build();
+        new DockerFileBuilder().add("/src", "/dest")
+                .baseImage("image")
+                .cmd(a)
+                .env(ImmutableMap.of("foo", "bar"))
+                .basedir("/export")
+                .expose(Collections.singletonList("8080/bogusdatagram"))
+                .maintainer("maintainer@example.com")
+                .workdir("/tmp")
+                .labels(ImmutableMap.of("com.acme.foobar", "How are \"you\" ?"))
+                .volumes(Collections.singletonList("/vol1"))
+                .run(Arrays.asList("echo something", "echo second"))
+                .content();
+    }      
 
     @Test
     public void testDockerFileOptimisation() throws Exception {
@@ -86,6 +157,20 @@ public class DockerFileBuilderTest {
     }
 
     @Test
+    public void testHealthCheckCmdParams() {
+        HealthCheckConfiguration hc = new HealthCheckConfiguration.Builder().cmd("echo hello").interval("5s").timeout("3s").retries(4).build();
+        String dockerfileContent = new DockerFileBuilder().healthCheck(hc).content();
+        assertThat(dockerfileToMap(dockerfileContent), hasEntry("HEALTHCHECK", "--interval=5s --timeout=3s --retries=4 CMD echo hello"));
+    }
+
+    @Test
+    public void testHealthCheckNone() {
+        HealthCheckConfiguration hc = new HealthCheckConfiguration.Builder().mode(HealthCheckMode.none).build();
+        String dockerfileContent = new DockerFileBuilder().healthCheck(hc).content();
+        assertThat(dockerfileToMap(dockerfileContent), hasEntry("HEALTHCHECK", "NONE"));
+    }
+
+    @Test
     public void testNoRootExport() {
         assertFalse(new DockerFileBuilder().add("/src", "/dest").basedir("/").content().contains("VOLUME"));
     }
@@ -119,8 +204,8 @@ public class DockerFileBuilderTest {
     public void testExportBaseDir() {
         assertTrue(new DockerFileBuilder().basedir("/export").content().contains("/export"));
         assertFalse(new DockerFileBuilder().baseImage("java").basedir("/export").content().contains("/export"));
-        assertTrue(new DockerFileBuilder().baseImage("java").exportBasedir(true).basedir("/export").content().contains("/export"));
-        assertFalse(new DockerFileBuilder().baseImage("java").exportBasedir(false).basedir("/export").content().contains("/export"));
+        assertTrue(new DockerFileBuilder().baseImage("java").exportTargetDir(true).basedir("/export").content().contains("/export"));
+        assertFalse(new DockerFileBuilder().baseImage("java").exportTargetDir(false).basedir("/export").content().contains("/export"));
     }
 
     @Test

@@ -1,6 +1,6 @@
 package io.fabric8.maven.docker;
 /*
- * 
+ *
  * Copyright 2016 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,4 +25,12 @@ import org.apache.maven.plugins.annotations.Mojo;
  * @since 26/04/16
  */
 @Mojo(name = "run", defaultPhase = LifecyclePhase.PRE_INTEGRATION_TEST)
-public class RunMojo extends StartMojo { }
+public class RunMojo extends StartMojo {
+
+    @Override
+    protected Boolean followLogs() {
+        // Follow logs by default
+        return Boolean.valueOf(System.getProperty("docker.follow", "true"));
+    }
+}
+

@@ -1,5 +1,5 @@
 package io.fabric8.maven.docker.service;/*
- * 
+ *
  * Copyright 2014 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,15 +46,12 @@ public class MojoExecutionServiceTest {
     @Mocked
     MojoExecutionService executionService;
 
-    @Mocked
     @Injectable
     protected MavenProject project;
 
-    @Mocked
     @Injectable
     MavenSession session;
 
-    @Mocked
     @Injectable
     BuildPluginManager pluginManager;
 
@@ -140,10 +137,9 @@ public class MojoExecutionServiceTest {
         }};
     }
 
-    private Expectations overrideGetPluginDescriptor() throws NoSuchMethodException, InvocationTargetException, InvalidPluginDescriptorException, IllegalAccessException, PluginResolutionException, PluginNotFoundException, PluginDescriptorParsingException {
+    private Expectations overrideGetPluginDescriptor() throws NoSuchMethodException, InvocationTargetException, InvalidPluginDescriptorException, IllegalAccessException, PluginResolutionException, PluginNotFoundException, PluginDescriptorParsingException, MojoFailureException {
         return new Expectations() {{
             executionService.getPluginDescriptor((MavenProject) any,(Plugin) any);
-            result = pluginDescriptor;
         }};
     }
 }

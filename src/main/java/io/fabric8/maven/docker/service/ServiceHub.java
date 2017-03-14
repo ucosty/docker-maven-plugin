@@ -1,5 +1,5 @@
-package io.fabric8.maven.docker.service;/*
- * 
+/*
+ *
  * Copyright 2015 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,19 +14,21 @@ package io.fabric8.maven.docker.service;/*
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.fabric8.maven.docker.service;
 
 import io.fabric8.maven.docker.access.DockerAccess;
 import io.fabric8.maven.docker.assembly.DockerAssemblyManager;
 import io.fabric8.maven.docker.log.LogOutputSpecFactory;
 import io.fabric8.maven.docker.util.Logger;
+
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.project.MavenProject;
 
 /**
- * A service hub responsible for creating and managing service which are used by
+ * A service hub responsible for creating and managing services which are used by
  * Mojos for calling to the docker backend. The docker backend (DAO) is injected from the outside.
- &
+ *
  * @author roland
  * @since 01/12/15
  */
@@ -34,32 +36,38 @@ public class ServiceHub {
 
     private final DockerAccess dockerAccess;
 
-    private final LogOutputSpecFactory logSpecFactory;
-
     private final QueryService queryService;
     private final RunService runService;
+    private final RegistryService registryService;
     private final BuildService buildService;
     private final MojoExecutionService mojoExecutionService;
     private final ArchiveService archiveService;
+    private final VolumeService volumeService;
+    private final WatchService watchService;
 
     ServiceHub(DockerAccess dockerAccess, ContainerTracker containerTracker, BuildPluginManager pluginManager,
                DockerAssemblyManager dockerAssemblyManager, MavenProject project, MavenSession session,
                Logger logger, LogOutputSpecFactory logSpecFactory) {
 
         this.dockerAccess = dockerAccess;
-        this.logSpecFactory = logSpecFactory;
 
         mojoExecutionService = new MojoExecutionService(project, session, pluginManager);
         archiveService = new ArchiveService(dockerAssemblyManager, logger);
 
         if (dockerAccess != null) {
-            queryService = new QueryService(dockerAccess, logger);
+            queryService = new QueryService(dockerAccess);
+            registryService = new RegistryService(dockerAccess, queryService, logger);
             runService = new RunService(dockerAccess, queryService, containerTracker, logSpecFactory, logger);
-            buildService = new BuildService(dockerAccess, queryService, archiveService, logger);
+            buildService = new BuildService(dockerAccess, queryService, registryService, archiveService, logger);
+            volumeService = new VolumeService(dockerAccess);
+            watchService = new WatchService(archiveService, buildService, dockerAccess, mojoExecutionService, queryService, runService, logger);
         } else {
             queryService = null;
+            registryService = null;
             runService = null;
             buildService = null;
+            volumeService = null;
+            watchService = null;
         }
     }
 
@@ -93,6 +101,16 @@ public class ServiceHub {
         return queryService;
     }
 
+    /**
+     * Get the registry service to push/pull images
+     *
+     * @return query service
+     */
+    public RegistryService getRegistryService() {
+        checkDockerAccessInitialization();
+        return registryService;
+    }
+
 
     /**
      * The run service is responsible for creating and starting up containers
@@ -102,6 +120,26 @@ public class ServiceHub {
     public RunService getRunService() {
         checkDockerAccessInitialization();
         return runService;
+    }
+    
+    /**
+     * The volume service is responsible for creating volumes
+     *
+     * @return the run service
+     */
+    public VolumeService getVolumeService() {
+        checkDockerAccessInitialization();
+        return volumeService;
+    }
+
+    /**
+     * The watch service is responsible for watching container status and rebuilding
+     *
+     * @return the watch service
+     */
+    public WatchService getWatchService() {
+        checkDockerAccessInitialization();
+        return watchService;
     }
 
     public ArchiveService getArchiveService() {

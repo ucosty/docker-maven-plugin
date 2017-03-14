@@ -1,5 +1,5 @@
 package io.fabric8.maven.docker.config.handler.property;/*
- * 
+ *
  * Copyright 2014 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +14,6 @@ package io.fabric8.maven.docker.config.handler.property;/*
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-import static io.fabric8.maven.docker.assembly.DockerFileKeyword.WORKDIR;
 
 /**
  * Enum holding possible configuration keys
@@ -32,26 +30,39 @@ public enum ConfigKey {
     ASSEMBLY_DESCRIPTOR_REF("assembly.descriptorRef"),
     ASSEMBLY_EXPORT_BASEDIR("assembly.exportBaseDir"),
     ASSEMBLY_IGNORE_PERMISSIONS("assembly.ignorePermissions"),
+    ASSEMBLY_PERMISSIONS("assembly.permissions"),
     ASSEMBLY_DOCKER_FILE_DIR("assembly.dockerFileDir"),
     ASSEMBLY_USER("assembly.user"),
     ASSEMBLY_MODE("assembly.mode"),
+    ASSEMBLY_TARLONGFILEMODE("assembly.tarLongFileMode"),
     BIND,
+    BUILD_OPTIONS,
     CAP_ADD,
     CAP_DROP,
     CLEANUP,
     NOCACHE,
     OPTIMISE,
     CMD,
+    DEPENDS_ON,
     DOMAINNAME,
     DNS,
     DNS_SEARCH,
+    DOCKER_ARCHIVE,
     DOCKER_FILE,
     DOCKER_FILE_DIR,
     ENTRYPOINT,
     ENV,
     ENV_PROPERTY_FILE,
+    EXPOSED_PROPERTY_KEY,
     EXTRA_HOSTS,
     FROM,
+    FROM_EXT,
+    HEALTHCHECK,
+    HEALTHCHECK_MODE("healthcheck.mode"),
+    HEALTHCHECK_INTERVAL("healthcheck.interval"),
+    HEALTHCHECK_TIMEOUT("healthcheck.timeout"),
+    HEALTHCHECK_RETRIES("healthcheck.retries"),
+    HEALTHCHECK_CMD("healthcheck.cmd"),
     HOSTNAME,
     LABELS,
     LINKS,
@@ -67,6 +78,9 @@ public enum ConfigKey {
     NAME,
     NAMING_STRATEGY,
     NET,
+    NETWORK_MODE("network.mode"),
+    NETWORK_NAME("network.name"),
+    NETWORK_ALIAS("network.alias"),
     PORT_PROPERTY_FILE,
     PORTS,
     POST_START("wait.exec.postStart"),
@@ -76,10 +90,13 @@ public enum ConfigKey {
     RESTART_POLICY_NAME("restartPolicy.name"),
     RESTART_POLICY_RETRY("restartPolicy.retry"),
     RUN,
+    SECURITY_OPTS,
     SHMSIZE,
     SKIP_BUILD("skip.build"),
     SKIP_RUN("skip.run"),
     TAGS,
+    TMPFS,
+    ULIMITS,
     USER,
     VOLUMES,
     VOLUMES_FROM,
@@ -91,6 +108,7 @@ public enum ConfigKey {
     WAIT_HTTP_STATUS("wait.http.status"),
     WAIT_KILL("wait.kill"),
     WAIT_SHUTDOWN("wait.shutdown"),
+    WAIT_TCP_MODE("wait.tcp.mode"),
     WAIT_TCP_HOST("wait.tcp.host"),
     WAIT_TCP_PORT("wait.tcp.port"),
     WATCH_INTERVAL("watch.interval"),

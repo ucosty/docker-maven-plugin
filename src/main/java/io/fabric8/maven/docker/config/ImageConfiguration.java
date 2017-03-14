@@ -1,17 +1,16 @@
 package io.fabric8.maven.docker.config;
 
+import java.io.Serializable;
 import java.util.*;
 
-import io.fabric8.maven.docker.util.EnvUtil;
-import io.fabric8.maven.docker.util.Logger;
-import io.fabric8.maven.docker.util.StartOrderResolver;
+import io.fabric8.maven.docker.util.*;
 import org.apache.maven.plugins.annotations.Parameter;
 
 /**
  * @author roland
  * @since 02.09.14
  */
-public class ImageConfiguration implements StartOrderResolver.Resolvable {
+public class ImageConfiguration implements StartOrderResolver.Resolvable, Serializable {
 
     @Parameter(required = true)
     private String name;
@@ -33,23 +32,23 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
 
     @Parameter
     private String registry;
-    
+
     // Used for injection
     public ImageConfiguration() {}
-
-    public ImageConfiguration(ImageConfiguration that) {
-        this.name = that.name;
-        this.alias = that.alias;
-        this.run = that.run;
-        this.build = that.build;
-        this.watch = that.watch;
-        this.external = that.external;
-        this.registry = that.registry;
-    }
 
     @Override
     public String getName() {
         return name;
+    }
+
+    /**
+     * Change the name which can be useful in long running runs e.g. for updating
+     * images when doing updates. Use with caution and only for those circumstances.
+     *
+     * @param name image name to set.
+     */
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Override
@@ -81,12 +80,13 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
             addVolumes(runConfig, ret);
             addLinks(runConfig, ret);
             addContainerNetwork(runConfig, ret);
+            addDependsOn(runConfig, ret);
         }
         return ret;
     }
 
     private void addVolumes(RunImageConfiguration runConfig, List<String> ret) {
-        VolumeConfiguration volConfig = runConfig.getVolumeConfiguration();
+        RunVolumeConfiguration volConfig = runConfig.getVolumeConfiguration();
         if (volConfig != null) {
             List<String> volumeImages = volConfig.getFrom();
             if (volumeImages != null) {
@@ -97,7 +97,7 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
 
     private void addLinks(RunImageConfiguration runConfig, List<String> ret) {
         // Custom networks can have circular links, no need to be considered for the starting order.
-        if (runConfig.getLinks() != null && !runConfig.getNetworkingMode().isCustomNetwork()) {
+        if (runConfig.getLinks() != null && !runConfig.getNetworkingConfig().isCustomNetwork()) {
             for (String[] link : EnvUtil.splitOnLastColon(runConfig.getLinks())) {
                 ret.add(link[0]);
             }
@@ -105,10 +105,19 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
     }
 
     private void addContainerNetwork(RunImageConfiguration runConfig, List<String> ret) {
-        NetworkingMode mode = runConfig.getNetworkingMode();
-        String alias = mode.getContainerAlias();
+        NetworkConfig config = runConfig.getNetworkingConfig();
+        String alias = config.getContainerAlias();
         if (alias != null) {
             ret.add(alias);
+        }
+    }
+
+    private void addDependsOn(RunImageConfiguration runConfig, List<String> ret) {
+        // Only used in custom networks.
+        if (runConfig.getDependsOn() != null && runConfig.getNetworkingConfig().isCustomNetwork()) {
+            for (String link : runConfig.getDependsOn()) {
+                ret.add(link);
+            }
         }
     }
 
@@ -118,9 +127,9 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
         // is a data image or not on its own.
         return getRunConfiguration() == null;
     }
-    
+
     public String getDescription() {
-        return String.format("[%s] %s", name, (alias != null ? "\"" + alias + "\"" : ""));
+        return String.format("[%s] %s", name, (alias != null ? "\"" + alias + "\"" : "")).trim();
     }
 
     public String getRegistry() {
@@ -150,13 +159,17 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
     public static class Builder {
         private final ImageConfiguration config;
 
-        public Builder() {
-            this.config = new ImageConfiguration();
+        public Builder()  {
+            this(null);
         }
 
 
         public Builder(ImageConfiguration that) {
-            this.config = new ImageConfiguration(that);
+            if (that == null) {
+                this.config = new ImageConfiguration();
+            } else {
+                this.config = DeepCopy.copy(that);
+            }
         }
 
         public Builder name(String name) {
@@ -183,7 +196,7 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
             config.external = externalConfig;
             return this;
         }
-        
+
         public ImageConfiguration build() {
             return config;
         }

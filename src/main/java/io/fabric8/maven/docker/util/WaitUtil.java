@@ -3,20 +3,29 @@ package io.fabric8.maven.docker.util;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.ssl.SSLContextBuilder;
+
+import io.fabric8.maven.docker.config.WaitConfiguration;
 
 
 /**
@@ -35,18 +44,28 @@ public class WaitUtil {
     private static final int HTTP_PING_TIMEOUT = 500;
     private static final int TCP_PING_TIMEOUT = 500;
 
-    // Default HTTP Method to use
-    public static final String DEFAULT_HTTP_METHOD = "HEAD";
-
-    // Default status codes
-    public static final int DEFAULT_MIN_STATUS = 200;
-    public static final int DEFAULT_MAX_STATUS = 399;
-
     // Disable HTTP client retries by default.
     public static final int HTTP_CLIENT_RETRIES = 0;
 
 
     private WaitUtil() {}
+
+    public static long wait(int wait, Callable<Void> callable) throws ExecutionException, WaitTimeoutException {
+        long now = System.currentTimeMillis();
+        if (wait > 0) {
+            try {
+                FutureTask<Void> task = new FutureTask<>(callable);
+                task.run();
+
+                task.get(wait, TimeUnit.SECONDS);
+            } catch (@SuppressWarnings("unused") InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (@SuppressWarnings("unused") TimeoutException e) {
+                throw new WaitTimeoutException("timed out waiting for execution to complete", delta(now));
+            }
+        }
+        return delta(now);
+    }
 
     public static long wait(int maxWait, WaitChecker ... checkers) throws WaitTimeoutException {
         return wait(maxWait, Arrays.asList(checkers));
@@ -89,6 +108,7 @@ public class WaitUtil {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             // ...
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -107,6 +127,7 @@ public class WaitUtil {
         private int statusMin, statusMax;
         private String url;
         private String method;
+        private boolean allowAllHosts;
 
         /**
          * Ping the given URL
@@ -119,26 +140,22 @@ public class WaitUtil {
             this.url = url;
             this.method = method;
 
-            if (method == null) {
-                this.method = DEFAULT_HTTP_METHOD;
-            }
-
-            if (status == null) {
-                statusMin = DEFAULT_MIN_STATUS;
-                statusMax = DEFAULT_MAX_STATUS;
+            Matcher matcher = Pattern.compile("^(\\d+)\\s*\\.\\.+\\s*(\\d+)$").matcher(status);
+            if (matcher.matches()) {
+                statusMin = Integer.parseInt(matcher.group(1));
+                statusMax = Integer.parseInt(matcher.group(2));
             } else {
-                Matcher matcher = Pattern.compile("^(\\d+)\\s*\\.\\.+\\s*(\\d+)$").matcher(status);
-                if (matcher.matches()) {
-                    statusMin = Integer.parseInt(matcher.group(1));
-                    statusMax = Integer.parseInt(matcher.group(2));
-                } else {
-                    statusMin = statusMax = Integer.parseInt(status);
-                }
+                statusMin = statusMax = Integer.parseInt(status);
             }
         }
 
         public HttpPingChecker(String waitUrl) {
-            this(waitUrl, null, null);
+            this(waitUrl, WaitConfiguration.DEFAULT_HTTP_METHOD, WaitConfiguration.DEFAULT_STATUS_RANGE);
+        }
+
+        public HttpPingChecker(String url, String method, String status, boolean allowAllHosts) {
+            this(url, method, status);
+            this.allowAllHosts = allowAllHosts;
         }
 
         @Override
@@ -156,11 +173,30 @@ public class WaitUtil {
                             .setSocketTimeout(HTTP_PING_TIMEOUT)
                             .setConnectTimeout(HTTP_PING_TIMEOUT)
                             .setConnectionRequestTimeout(HTTP_PING_TIMEOUT)
+                            .setRedirectsEnabled(false)
                             .build();
-            CloseableHttpClient httpClient = HttpClientBuilder.create()
-                    .setDefaultRequestConfig(requestConfig)
-                    .setRetryHandler(new DefaultHttpRequestRetryHandler(HTTP_CLIENT_RETRIES, false))
-                    .build();
+
+            CloseableHttpClient httpClient = null;
+            if (allowAllHosts) {
+                SSLContextBuilder builder = new SSLContextBuilder();
+                try {
+                    builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
+                    SSLConnectionSocketFactory socketFactory = new SSLConnectionSocketFactory(builder.build(), NoopHostnameVerifier.INSTANCE);
+                    httpClient = HttpClientBuilder.create()
+                            .setDefaultRequestConfig(requestConfig)
+                            .setRetryHandler(new DefaultHttpRequestRetryHandler(HTTP_CLIENT_RETRIES, false))
+                            .setSSLSocketFactory(socketFactory)
+                            .build();
+                } catch (NoSuchAlgorithmException | KeyStoreException | KeyManagementException e) {
+                    throw new RuntimeException("Unable to set self signed strategy on http wait", e);
+                }
+            } else {
+                httpClient = HttpClientBuilder.create()
+                        .setDefaultRequestConfig(requestConfig)
+                        .setRetryHandler(new DefaultHttpRequestRetryHandler(HTTP_CLIENT_RETRIES, false))
+                        .build();
+            }
+
             try {
                 CloseableHttpResponse response = httpClient.execute(RequestBuilder.create(method.toUpperCase()).setUri(url).build());
                 try {

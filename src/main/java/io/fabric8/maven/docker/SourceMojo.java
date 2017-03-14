@@ -1,5 +1,6 @@
-package io.fabric8.maven.docker;/*
- * 
+package io.fabric8.maven.docker;
+/*
+ *
  * Copyright 2015 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,14 +20,18 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.fabric8.maven.docker.config.BuildImageConfiguration;
-import io.fabric8.maven.docker.config.SourceMode;
-import io.fabric8.maven.docker.util.MojoParameters;
 import io.fabric8.maven.docker.access.DockerAccessException;
+import io.fabric8.maven.docker.config.BuildImageConfiguration;
 import io.fabric8.maven.docker.config.ImageConfiguration;
+import io.fabric8.maven.docker.config.SourceMode;
 import io.fabric8.maven.docker.service.ServiceHub;
+import io.fabric8.maven.docker.util.MojoParameters;
+
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.*;
+import org.apache.maven.plugins.annotations.Component;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProjectHelper;
 
 /**
@@ -40,8 +45,7 @@ import org.apache.maven.project.MavenProjectHelper;
  * @since 25/10/15
  */
 @Mojo(name = "source", defaultPhase = LifecyclePhase.PACKAGE)
-@Execute(phase = LifecyclePhase.PACKAGE)
-public class SourceMojo extends  AbstractBuildSupportMojo {
+public class SourceMojo extends AbstractBuildSupportMojo {
 
     @Component
     private MavenProjectHelper projectHelper;

@@ -1,6 +1,6 @@
 package io.fabric8.maven.docker.util;
 /*
- * 
+ *
  * Copyright 2016 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,8 +36,11 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
 
     private final Map<String, Lookup> lookups;
 
-    public ImageNameFormatter(MavenProject project) {
+    private final Date now;
+
+    public ImageNameFormatter(MavenProject project, Date now) {
         this.lookups = new HashMap<>();
+        this.now = now;
         initLookups(project);
     }
 
@@ -89,9 +92,9 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
         lookups.put("a", new DefaultNameLookup(project));
 
         // Various ways for adding a version
-        lookups.put("v", new DefaultTagLookup(project, DefaultTagLookup.Mode.PLAIN));
-        lookups.put("t", new DefaultTagLookup(project, DefaultTagLookup.Mode.SNAPSHOT_WITH_TIMESTAMP));
-        lookups.put("l", new DefaultTagLookup(project, DefaultTagLookup.Mode.SNAPSHOT_LATEST));
+        lookups.put("v", new DefaultTagLookup(project, DefaultTagLookup.Mode.PLAIN, now));
+        lookups.put("t", new DefaultTagLookup(project, DefaultTagLookup.Mode.SNAPSHOT_WITH_TIMESTAMP, now));
+        lookups.put("l", new DefaultTagLookup(project, DefaultTagLookup.Mode.SNAPSHOT_LATEST, now));
     }
 
     // ==============================================================================================
@@ -119,7 +122,7 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
         private DefaultUserLookup(MavenProject project) {
             super(project);
         }
-        
+
         public String lookup() {
             String user = getProperty(DOCKER_IMAGE_USER);
             if (user != null) {
@@ -135,22 +138,12 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
     }
 
     private static class DefaultNameLookup extends AbstractLookup {
-        /**
-         * Property to lookup for image name which overwrites the calculated default (artifact)
-         * Used with format modifier %a
-         */
-        private static final String DOCKER_IMAGE_NAME = "docker.image.name";
-
 
         private DefaultNameLookup(MavenProject project) {
             super(project);
         }
 
         public String lookup() {
-            String tag = getProperty(DOCKER_IMAGE_NAME);
-            if (!Strings.isNullOrEmpty(tag)) {
-                return tag;
-            }
             return sanitizeName(project.getArtifactId());
         }
     }
@@ -168,15 +161,19 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
         // how to resolve the version
         private final Mode mode;
 
+        // timestamp indicating now
+        private final Date now;
+
         private enum Mode {
             PLAIN,
             SNAPSHOT_WITH_TIMESTAMP,
             SNAPSHOT_LATEST
         }
 
-        private DefaultTagLookup(MavenProject project, Mode mode) {
+        private DefaultTagLookup(MavenProject project, Mode mode, Date now) {
             super(project);
             this.mode = mode;
+            this.now = now;
         }
 
         public String lookup() {
@@ -189,7 +186,7 @@ public class ImageNameFormatter implements ConfigHelper.NameFormatter {
             if (mode != Mode.PLAIN) {
                 if (tag.endsWith("-SNAPSHOT")) {
                     if (mode == Mode.SNAPSHOT_WITH_TIMESTAMP) {
-                        tag = "snapshot-" + new SimpleDateFormat("yyMMdd-HHmmss-SSSS").format(new Date());
+                        tag = "snapshot-" + new SimpleDateFormat("yyMMdd-HHmmss-SSSS").format(now);
                     } else if (mode == Mode.SNAPSHOT_LATEST) {
                         tag = "latest";
                     }

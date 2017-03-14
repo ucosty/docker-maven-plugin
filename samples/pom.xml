@@ -21,11 +21,12 @@
 
   <groupId>io.fabric8</groupId>
   <artifactId>dmp-sample-parent</artifactId>
-  <version>0.15-SNAPSHOT</version>
+  <version>0.20.0</version>
   <packaging>pom</packaging>
 
   <url>http://www.jolokia.org</url>
 
+  <!-- Should this reference the outer directory as a parent pom instead?  -->
   <properties>
     <docker.maven.plugin.version>${project.version}</docker.maven.plugin.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -45,10 +46,16 @@
   </build>
 
   <modules>
-   <module>net</module>
-   <module>properties</module>
-   <module>dockerignore</module> 
-   <module>data-jolokia-demo</module> 
-   <!-- module>cargo-jolokia-demo</module --> 
+    <module>net</module>
+    <module>custom-net</module>
+    <module>volume</module>
+    <module>properties</module>
+    <module>dockerignore</module>
+    <module>docker-compose-demo</module>
+    <module>data-jolokia-demo</module>
+    <module>healthcheck</module>
+    <module>multi-wait</module>
+    <module>helloworld</module>
+   <!-- module>cargo-jolokia-demo</module -->
   </modules>
 </project>

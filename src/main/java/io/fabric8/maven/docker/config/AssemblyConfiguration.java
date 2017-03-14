@@ -1,65 +1,95 @@
 package io.fabric8.maven.docker.config;
 
 
-import org.apache.maven.plugin.assembly.model.Assembly;
+import java.io.Serializable;
 
-public class AssemblyConfiguration {
+import org.apache.maven.plugin.assembly.model.Assembly;
+import org.apache.maven.plugins.annotations.Parameter;
+
+public class AssemblyConfiguration implements Serializable {
 
     private static final String DEFAULT_BASE_DIR = "/maven";
-    
+
     /**
-     * @parameter
+     * @deprecated Use 'targetDir' instead
      */
+    @Deprecated
     private String basedir;
 
     /**
-     * @parameter
+     * New replacement for base directory which better reflects its
+     * purpose
      */
+    @Parameter
+    private String targetDir;
+
+    @Parameter
     private String descriptor;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private Assembly inline;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private String descriptorRef;
 
     /**
-     * @parameter
      * @deprecated Use {@link BuildImageConfiguration#dockerFileDir} instead
      */
+    @Parameter
+    @Deprecated
     private String dockerFileDir;
 
-    /**
-     * @parameter default-value="true"
-     */
+    // use 'exportTargetDir' instead
+    @Deprecated
     private Boolean exportBasedir;
 
     /**
-     * @paramter default-value="false"
+     * Whether the target directory should be
+     * exported.
+     *
      */
+    @Parameter
+    private Boolean exportTargetDir;
+
+    /**
+     * @deprecated use permissionMode == ignore instead.
+     */
+    @Parameter
     private Boolean ignorePermissions;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private AssemblyMode mode;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private String user;
 
-    public Boolean exportBasedir() {
-        return exportBasedir;
+    @Parameter
+    private String tarLongFileMode;
+
+    public Boolean exportTargetDir() {
+        if (exportTargetDir != null) {
+            return exportTargetDir;
+        } else if (exportBasedir != null) {
+            return exportBasedir;
+        } else {
+            return null;
+        }
     }
 
-    public String getBasedir() {
-        return basedir != null ? basedir : DEFAULT_BASE_DIR;
+    public String getTargetDir() {
+        if (targetDir != null) {
+            return targetDir;
+        } else if (basedir != null) {
+            return basedir;
+        } else {
+            return DEFAULT_BASE_DIR;
+        }
     }
+
+    /**
+     * @parameter default-value="keep"
+     */
+    private PermissionMode permissions;
 
     public Assembly getInline() {
         return inline;
@@ -85,10 +115,22 @@ public class AssemblyConfiguration {
         return mode != null ? mode : AssemblyMode.dir;
     }
 
+    public String getTarLongFileMode() {
+        return tarLongFileMode;
+    }
+
     public Boolean isIgnorePermissions() {
+        // New permission mode has precedence
+        if (permissions != null) {
+            return permissions == PermissionMode.ignore;
+        }
         return (ignorePermissions != null) ? ignorePermissions : Boolean.FALSE;
     }
-    
+
+    public PermissionMode getPermissions() {
+        return permissions != null ? permissions : PermissionMode.keep;
+    }
+
     public static class Builder {
 
         private final AssemblyConfiguration config = new AssemblyConfiguration();
@@ -98,8 +140,8 @@ public class AssemblyConfiguration {
             return isEmpty ? null : config;
         }
 
-        public Builder basedir(String baseDir) {
-            config.basedir = set(baseDir);
+        public Builder targetDir(String targetDir) {
+            config.targetDir = set(targetDir);
             return this;
         }
 
@@ -122,14 +164,22 @@ public class AssemblyConfiguration {
             config.dockerFileDir = set(dockerFileDir);
             return this;
         }
-        
+
         public Builder exportBasedir(Boolean export) {
             config.exportBasedir = set(export);
             return this;
         }
 
+        @Deprecated
         public Builder ignorePermissions(Boolean ignorePermissions) {
             config.ignorePermissions = set(ignorePermissions);
+            return this;
+        }
+
+        public Builder permissions(String permissions) {
+            if (permissions != null) {
+                config.permissions = PermissionMode.valueOf(permissions.toLowerCase());
+            }
             return this;
         }
 
@@ -146,11 +196,39 @@ public class AssemblyConfiguration {
             return this;
         }
 
+        public Builder tarLongFileMode(String tarLongFileMode) {
+            config.tarLongFileMode = set(tarLongFileMode);
+            return this;
+        }
+
          private <T> T set(T prop) {
             if (prop != null) {
                 isEmpty = false;
             }
             return prop;
         }
+    }
+
+    public enum PermissionMode {
+
+        /**
+         * Auto detect permission mode
+         */
+        auto,
+
+        /**
+         * Make everything executable
+         */
+        exec,
+
+        /**
+         * Leave all as it is
+         */
+        keep,
+
+        /**
+         * Ignore permission when using an assembly mode of "dir"
+         */
+        ignore
     }
 }

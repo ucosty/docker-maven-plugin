@@ -1,5 +1,5 @@
 package io.fabric8.maven.docker.config;/*
- * 
+ *
  * Copyright 2014 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,13 @@ package io.fabric8.maven.docker.config;/*
 import java.util.*;
 
 import io.fabric8.maven.docker.config.handler.ExternalConfigHandler;
+import org.apache.maven.execution.MavenSession;
+import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.personality.plexus.lifecycle.phase.InitializationException;
 import org.codehaus.plexus.util.ReflectionUtils;
 import io.fabric8.maven.docker.config.handler.ImageConfigResolver;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -37,13 +40,13 @@ public class ImageConfigResolverTest {
     @Before
     public void setUp() throws Exception {
         resolver = new ImageConfigResolver();
-        ReflectionUtils.setVariableValueInObject(resolver, "handlers", Collections.singletonList(new TestHandler(3)));
+        ReflectionUtils.setVariableValueInObject(resolver, "propertyConfigHandler", new TestHandler(3));
         resolver.initialize();
     }
 
     @Test
     public void direct() throws IllegalAccessException, InitializationException {
-        List<ImageConfiguration> rest = resolver.resolve(getImageConfiguration("vanilla"),null);
+        List<ImageConfiguration> rest = resolver.resolve(getImageConfiguration("vanilla"),null, null);
         assertEquals(1, rest.size());
         assertEquals("vanilla", rest.get(0).getName());
     }
@@ -52,7 +55,7 @@ public class ImageConfigResolverTest {
     public void withReference() throws Exception {
         Map<String,String> refConfig = Collections.singletonMap("type", "test");
         ImageConfiguration config = new ImageConfiguration.Builder().name("reference").externalConfig(refConfig).build();
-        List<ImageConfiguration> rest = resolver.resolve(config,null);
+        List<ImageConfiguration> rest = resolver.resolve(config,null, null);
         assertEquals(3,rest.size());
         for (int i = 0; i < 3;i++) {
             assertEquals("image " + i,rest.get(i).getName());
@@ -65,7 +68,7 @@ public class ImageConfigResolverTest {
         ImageConfiguration config = new ImageConfiguration.Builder()
                 .name("reference")
                 .externalConfig(refConfig).build();
-        resolver.resolve(config,null);
+        resolver.resolve(config,null, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -74,7 +77,7 @@ public class ImageConfigResolverTest {
         ImageConfiguration config = new ImageConfiguration.Builder()
                 .name("reference")
                 .externalConfig(refConfig).build();
-        resolver.resolve(config,null);
+        resolver.resolve(config,null, null);
     }
 
     private static class TestHandler implements ExternalConfigHandler {
@@ -91,7 +94,7 @@ public class ImageConfigResolverTest {
         }
 
         @Override
-        public List<ImageConfiguration> resolve(ImageConfiguration referenceConfig, Properties properties) {
+        public List<ImageConfiguration> resolve(ImageConfiguration referenceConfig, MavenProject project, MavenSession session) {
             List<ImageConfiguration> ret = new ArrayList<>();
             for (int i = 0; i < nr;i++) {
                 ImageConfiguration config = getImageConfiguration("image " + i);

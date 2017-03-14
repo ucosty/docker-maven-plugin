@@ -92,6 +92,10 @@ public class ImageName {
             }
         }
 
+        if (tag == null) {
+            tag = "latest";
+        }
+
         doValidate();
     }
 
@@ -175,7 +179,7 @@ public class ImageName {
      * @return full name with original registry (if set) or optional registry (if not <code>null</code>).
      */
     public String getFullName(String optionalRegistry) {
-        return getNameWithoutTag(optionalRegistry) + ":" + (tag != null ? tag : "latest");
+        return getNameWithoutTag(optionalRegistry) + ":" + tag;
     }
 
     /**
@@ -189,6 +193,16 @@ public class ImageName {
     }
 
     /**
+     * Get the simple name of the image, which is the repository sans the user parts.
+     *
+     * @return simple name of the image
+     */
+    public String getSimpleName() {
+        String prefix = user + "/";
+        return repository.startsWith(prefix) ? repository.substring(prefix.length()) : repository;
+    }
+
+    /**
      * Check whether the given name validates agains the Docker rules for names
      *
      * @param image image name to validate
@@ -198,6 +212,7 @@ public class ImageName {
         // Validation will be triggered during construction
         new ImageName(image);
     }
+
     // ================================================================================================
 
     // Validations patterns, taken directly from the docker source

@@ -1,6 +1,6 @@
 package io.fabric8.maven.docker.config;
 /*
- * 
+ *
  * Copyright 2016 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,6 +65,26 @@ public class BuildImageConfigurationTest {
     }
 
     @Test
+    public void DockerfileDirAndDockerfileAlsoSet() {
+        BuildImageConfiguration config =
+            new BuildImageConfiguration.Builder().
+                dockerFileDir("/tmp/").
+                dockerFile("Dockerfile").build();
+        config.initAndValidate(logger);
+        assertTrue(config.isDockerFileMode());
+        assertEquals(config.getDockerFile(),new File("/tmp/Dockerfile"));
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void DockerfileDirAndDockerfileAlsoSetButDockerfileIsAbsoluteExceptionThrown() {
+        BuildImageConfiguration config =
+            new BuildImageConfiguration.Builder().
+                dockerFileDir("/tmp/").
+                dockerFile("/Dockerfile").build();
+        config.initAndValidate(logger);
+    }
+
+    @Test
     public void deprecatedDockerfileDir() {
         AssemblyConfiguration assemblyConfig = new AssemblyConfiguration.Builder().dockerFileDir("src/docker").build();
         BuildImageConfiguration config =
@@ -79,5 +99,32 @@ public class BuildImageConfigurationTest {
         assertTrue(config.isDockerFileMode());
         assertEquals(config.getDockerFile(),new File("src/docker/Dockerfile"));
     }
+
+    @Test
+    public void dockerFileAndArchve() {
+        BuildImageConfiguration config =
+            new BuildImageConfiguration.Builder().
+                dockerArchive("this").
+                dockerFile("that").build();
+
+        try {
+            config.initAndValidate(logger);
+        } catch (IllegalArgumentException expected) {
+            return;
+        }
+        fail("Should have failed.");
+    }
+
+    @Test
+    public void dockerArchive() {
+        BuildImageConfiguration config =
+            new BuildImageConfiguration.Builder().
+                dockerArchive("this").build();
+        config.initAndValidate(logger);
+
+        assertFalse(config.isDockerFileMode());
+        assertEquals(new File("this"), config.getDockerArchive());
+    }
+
 
 }

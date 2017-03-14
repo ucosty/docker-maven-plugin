@@ -1,5 +1,5 @@
 package io.fabric8.maven.docker.access.log;/*
- * 
+ *
  * Copyright 2014 Roland Huss
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,6 +34,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.client.CloseableHttpClient;
 
 /**
  * Extractor for parsing the response of a log request
@@ -44,8 +45,8 @@ import org.apache.http.client.methods.HttpUriRequest;
 public class LogRequestor extends Thread implements LogGetHandle {
 
     // Patter for matching log entries
-    private static final Pattern LOG_LINE = Pattern.compile("^\\[?([^\\s\\]]*)]?\\s+(.*)\\s*$");
-    private final HttpClient client;
+    static final Pattern LOG_LINE = Pattern.compile("^\\[?(?<timestamp>[^\\s\\]]*)]?\\s+(?<entry>.*?)\\s*$", Pattern.DOTALL);
+    private final CloseableHttpClient client;
 
     private final String containerId;
 
@@ -58,7 +59,10 @@ public class LogRequestor extends Thread implements LogGetHandle {
     private HttpUriRequest request;
 
     private final UrlBuilder urlBuilder;
-    
+
+    // Lock for synchronizing closing of requests
+    private final Object lock = new Object();
+
     /**
      * Create a helper object for requesting log entries synchronously ({@link #fetchLogs()}) or asynchronously ({@link #start()}.
      *
@@ -67,10 +71,10 @@ public class LogRequestor extends Thread implements LogGetHandle {
      * @param containerId container for which to fetch the host
      * @param callback callback to call for each line received
      */
-    public LogRequestor(HttpClient client, UrlBuilder urlBuilder, String containerId, LogCallback callback) {
+    public LogRequestor(CloseableHttpClient client, UrlBuilder urlBuilder, String containerId, LogCallback callback) {
         this.client = client;
         this.containerId = containerId;
-        
+
         this.urlBuilder = urlBuilder;
 
         this.callback = callback;
@@ -83,10 +87,13 @@ public class LogRequestor extends Thread implements LogGetHandle {
      */
     public void fetchLogs() {
         try {
+            callback.open();
             HttpResponse resp = client.execute(getLogRequest(false));
             parseResponse(resp);
         } catch (IOException exp) {
             callback.error(exp.getMessage());
+        } finally {
+            callback.close();
         }
     }
 
@@ -95,11 +102,22 @@ public class LogRequestor extends Thread implements LogGetHandle {
         // Response to extract from
 
         try {
+            callback.open();
             request = getLogRequest(true);
             HttpResponse response = client.execute(request);
             parseResponse(response);
         } catch (IOException exp) {
             callback.error("IO Error while requesting logs: " + exp);
+        } finally {
+            callback.close();
+            try {
+                synchronized (lock) {
+                    client.close();
+                    request = null;
+                }
+            } catch (IOException exp) {
+                callback.error("Error while closing client: " + exp);
+            }
         }
     }
 
@@ -193,8 +211,8 @@ public class LogRequestor extends Thread implements LogGetHandle {
                                          txt,(int) (txt.toCharArray())[0],(int) (txt.toCharArray())[1]));
             throw new LogCallback.DoneException();
         }
-        Timestamp ts = new Timestamp(matcher.group(1));
-        String logTxt = matcher.group(2);
+        Timestamp ts = new Timestamp(matcher.group("timestamp"));
+        String logTxt = matcher.group("entry");
         callback.log(type, ts, logTxt);
     }
 
@@ -205,7 +223,11 @@ public class LogRequestor extends Thread implements LogGetHandle {
     @Override
     public void finish() {
         if (request != null) {
-            request.abort();
+            synchronized (lock) {
+                if (request != null) {
+                    request.abort();
+                }
+            }
         }
     }
 

@@ -1,17 +1,20 @@
 package io.fabric8.maven.docker.config;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import io.fabric8.maven.docker.util.DeepCopy;
 import org.apache.maven.plugins.annotations.Parameter;
 
+import io.fabric8.maven.docker.util.EnvUtil;
 
 /**
  * @author roland
  * @since 02.09.14
  */
-public class RunImageConfiguration {
+public class RunImageConfiguration implements Serializable {
 
     static final RunImageConfiguration DEFAULT = new RunImageConfiguration();
 
@@ -35,6 +38,10 @@ public class RunImageConfiguration {
     // container domain name
     @Parameter
     private String domainname;
+
+    // container domain name
+    @Parameter
+    private List<String> dependsOn;
 
     // container entry point
     @Parameter
@@ -68,8 +75,12 @@ public class RunImageConfiguration {
     @Parameter
     private String portPropertyFile;
 
+    // For simple network setups. For complex stuff use "network"
     @Parameter
     private String net;
+
+    @Parameter
+    private NetworkConfig network;
 
     @Parameter
     private List<String> dns;
@@ -82,6 +93,9 @@ public class RunImageConfiguration {
 
     @Parameter
     private List<String> capDrop;
+
+    @Parameter
+    private List<String> securityOpts;
 
     @Parameter
     private Boolean privileged;
@@ -97,9 +111,15 @@ public class RunImageConfiguration {
     @Parameter
     private NamingStrategy namingStrategy;
 
+    /**
+     * Property key part used to expose the container ip when running.
+     */
+    @Parameter
+    private String exposedPropertyKey;
+
     // Mount volumes from the given image's started containers
     @Parameter
-    private VolumeConfiguration volumes;
+    private RunVolumeConfiguration volumes;
 
     // Links to other container started
     @Parameter
@@ -109,15 +129,23 @@ public class RunImageConfiguration {
     @Parameter
     private WaitConfiguration wait;
 
+    // Mountpath for tmps
+    @Parameter
+    private List<String> tmpfs;
+
     @Parameter
     private LogConfiguration log;
-    
+
     @Parameter
     private RestartPolicy restartPolicy;
 
     @Parameter
+    private List<UlimitConfig> ulimits;
+
+    @Parameter
     private boolean skip = false;
-    
+
+
     public RunImageConfiguration() { }
 
     public String initAndValidate() {
@@ -129,8 +157,8 @@ public class RunImageConfiguration {
         }
 
         // Custom networks are available since API 1.21 (Docker 1.9)
-        NetworkingMode mode = getNetworkingMode();
-        if (mode.isCustomNetwork()) {
+        NetworkConfig config = getNetworkingConfig();
+        if (config != null && config.isCustomNetwork()) {
             return "1.21";
         }
 
@@ -159,6 +187,10 @@ public class RunImageConfiguration {
 
     public String getDomainname() {
         return domainname;
+    }
+
+    public List<String> getDependsOn() {
+        return dependsOn;
     }
 
     public String getUser() {
@@ -209,12 +241,22 @@ public class RunImageConfiguration {
         return capDrop;
     }
 
+    public List<String> getSecurityOpts() {
+        return securityOpts;
+    }
+
     public List<String> getDns() {
         return dns;
     }
 
-    public NetworkingMode getNetworkingMode() {
-        return new NetworkingMode(net);
+    public NetworkConfig getNetworkingConfig() {
+        if (network != null) {
+            return network;
+        } else if (net != null) {
+            return new NetworkConfig(net);
+        } else {
+            return new NetworkConfig();
+        }
     }
 
     public List<String> getDnsSearch() {
@@ -224,13 +266,21 @@ public class RunImageConfiguration {
     public List<String> getExtraHosts() {
         return extraHosts;
     }
-    
-    public VolumeConfiguration getVolumeConfiguration() {
+
+    public RunVolumeConfiguration getVolumeConfiguration() {
         return volumes;
     }
 
     public List<String> getLinks() {
-        return links;
+        return EnvUtil.splitAtCommasAndTrim(links);
+    }
+
+    public List<UlimitConfig> getUlimits() {
+        return ulimits;
+    }
+
+    public List<String> getTmpfs() {
+        return tmpfs;
     }
 
     // Naming scheme for how to name container
@@ -248,7 +298,11 @@ public class RunImageConfiguration {
     public NamingStrategy getNamingStrategy() {
         return namingStrategy == null ? NamingStrategy.none : namingStrategy;
     }
-    
+
+    public String getExposedPropertyKey() {
+        return exposedPropertyKey;
+    }
+
     public Boolean getPrivileged() {
         return privileged;
     }
@@ -260,12 +314,24 @@ public class RunImageConfiguration {
     public boolean skip() {
         return skip;
     }
-    
+
     // ======================================================================================
 
     public static class Builder {
 
-        private RunImageConfiguration config = new RunImageConfiguration();
+        public Builder(RunImageConfiguration config) {
+            if (config == null) {
+                this.config = new RunImageConfiguration();
+            } else {
+                this.config = DeepCopy.copy(config);
+            }
+        }
+
+        public Builder() {
+            this(null);
+        }
+
+        private RunImageConfiguration config;
 
         public Builder env(Map<String, String> env) {
             config.env = env;
@@ -290,6 +356,11 @@ public class RunImageConfiguration {
             return this;
         }
 
+        public Builder cmd(Arguments args) {
+            config.cmd = args;
+            return this;
+        }
+
         public Builder domainname(String domainname) {
             config.domainname = domainname;
             return this;
@@ -299,6 +370,11 @@ public class RunImageConfiguration {
             if (entrypoint != null) {
                 config.entrypoint = new Arguments(entrypoint);
             }
+            return this;
+        }
+
+        public Builder entrypoint(Arguments args) {
+            config.entrypoint = args;
             return this;
         }
 
@@ -347,8 +423,23 @@ public class RunImageConfiguration {
             return this;
         }
 
+        public Builder securityOpts(List<String> securityOpts) {
+            config.securityOpts = securityOpts;
+            return this;
+        }
+
         public Builder net(String net) {
             config.net = net;
+            return this;
+        }
+
+        public Builder network(NetworkConfig networkConfig) {
+            config.network = networkConfig;
+            return this;
+        }
+
+        public Builder dependsOn(List<String> dependsOn) {
+            config.dependsOn = dependsOn;
             return this;
         }
 
@@ -367,18 +458,28 @@ public class RunImageConfiguration {
             return this;
         }
 
+        public Builder ulimits(List<UlimitConfig> ulimits) {
+            config.ulimits = ulimits;
+            return this;
+        }
+
         public Builder ports(List<String> ports) {
             config.ports = ports;
             return this;
         }
 
-        public Builder volumes(VolumeConfiguration volumes) {
+        public Builder volumes(RunVolumeConfiguration volumes) {
             config.volumes = volumes;
             return this;
         }
 
         public Builder links(List<String> links) {
             config.links = links;
+            return this;
+        }
+
+        public Builder tmpfs(List<String> tmpfs) {
+            config.tmpfs = tmpfs;
             return this;
         }
 
@@ -392,11 +493,20 @@ public class RunImageConfiguration {
             return this;
         }
 
-
         public Builder namingStrategy(String namingStrategy) {
             config.namingStrategy = namingStrategy == null ?
                     NamingStrategy.none :
                     NamingStrategy.valueOf(namingStrategy.toLowerCase());
+            return this;
+        }
+
+        public Builder namingStrategy(NamingStrategy namingStrategy) {
+            config.namingStrategy = namingStrategy;
+            return this;
+        }
+
+        public Builder exposedPropertyKey(String key) {
+            config.exposedPropertyKey = key;
             return this;
         }
 
@@ -421,5 +531,4 @@ public class RunImageConfiguration {
             return config;
         }
     }
-
 }
