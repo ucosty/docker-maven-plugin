@@ -109,7 +109,9 @@ public class ConfigHelper {
         List<ImageConfiguration> ret = new ArrayList<>();
         if (unresolvedImages != null) {
             for (ImageConfiguration image : unresolvedImages) {
-                ret.addAll(imageResolver.resolve(image));
+                if(image.getName() != null) {
+                    ret.addAll(imageResolver.resolve(image));
+                }
             }
             verifyImageNames(ret);
         }
